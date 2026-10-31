@@ -8,6 +8,7 @@ import { notificationRoutes } from '../modules/notification/notification.routes'
 import { superAdminRoutes } from '../modules/superAdmin/superAdmin.routes';
 import { supportRoutes } from '../modules/support/support.routes';
 import { userRoutes } from '../modules/user/user.routes';
+import { topicRoutes } from '../modules/topic/topic.routes';
 
 const router = Router();
 
@@ -20,30 +21,26 @@ const moduleRoutes = [
         path: '/user',
         router: userRoutes,
     },
-
+    {
+        path: '/topic',
+        router: topicRoutes,
+    },
     {
         path: '/manage',
         router: ManageRoutes,
     },
-
     {
         path: '/notification',
         router: notificationRoutes,
     },
-
     {
         path: '/super-admin',
         router: superAdminRoutes,
     },
-
-
-
     {
         path: '/file',
         router: fileUploadRoutes,
     },
-
-
     {
         path: '/admin',
         router: AdminRoutes,

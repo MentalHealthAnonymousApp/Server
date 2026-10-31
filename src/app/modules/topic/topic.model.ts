@@ -2,7 +2,6 @@ import { Schema, model } from 'mongoose';
 import { TopicDocument, TopicModel } from './topic.interface';
 import { TOPIC_TONES } from './topic.constant';
 
-
 const topicSchema = new Schema<TopicDocument, TopicModel>(
     {
         slug: {
@@ -22,8 +21,6 @@ const topicSchema = new Schema<TopicDocument, TopicModel>(
             required: true,
             trim: true,
         },
-
-
         tone: {
             type: String,
             enum: TOPIC_TONES,
@@ -33,7 +30,6 @@ const topicSchema = new Schema<TopicDocument, TopicModel>(
             type: String,
             default: 'heart',
         },
-
         isDeleted: {
             type: Boolean,
             default: false,
@@ -46,4 +42,3 @@ const topicSchema = new Schema<TopicDocument, TopicModel>(
 
 export const Topic = model<TopicDocument, TopicModel>('Topic', topicSchema);
 export default Topic;
-
