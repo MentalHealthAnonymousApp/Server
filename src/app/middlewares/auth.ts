@@ -1,108 +1,130 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable no-unused-vars */
 import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
 import jwt, { JwtPayload } from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import config from '../config';
 import AppError from '../error/appError';
-import Admin from '../modules/admin/admin.model';
 import SuperAdmin from '../modules/superAdmin/superAdmin.model';
 import { USER_ROLE } from '../modules/user/user.constant';
 import { TUserRole } from '../modules/user/user.interface';
-import { User } from '../modules/user/user.model';
 import catchAsync from '../utilities/catchasync';
+import NormalUser from '../modules/normal_user/normal_user.model';
 
-const auth = (...requiredRoles: TUserRole[]) =>
-    catchAsync(async (req: Request, _res: Response, next: NextFunction) => {
-        const authorization = req.headers.authorization;
-        if (!authorization) {
-            throw new AppError(
-                httpStatus.UNAUTHORIZED,
-                'You are not authorized'
-            );
-        }
+// make costume interface
 
-        const token = authorization.startsWith('Bearer ')
-            ? authorization.slice(7)
-            : authorization;
+const auth = (...requiredRoles: TUserRole[]) => {
+    return catchAsync(
+        async (req: Request, res: Response, next: NextFunction) => {
+            // check if the token is sent from client -----
+            let token = req?.headers?.authorization;
 
-        let decoded: JwtPayload;
-        try {
-            decoded = jwt.verify(
-                token,
-                config.jwt_access_secret as string
-            ) as JwtPayload;
-        } catch {
-            throw new AppError(httpStatus.UNAUTHORIZED, 'Token is expired');
-        }
+            if (!token) {
+                throw new AppError(
+                    httpStatus.UNAUTHORIZED,
+                    'You are not authorized'
+                );
+            }
 
-        const { id, role } = decoded;
-        if (!id || !Object.values(USER_ROLE).includes(role)) {
-            throw new AppError(httpStatus.UNAUTHORIZED, 'Unauthorized access');
-        }
+            if (token.startsWith('Bearer ')) {
+                token = token.slice(7, token.length);
+            }
 
-        let profileId: string | undefined;
-        let accountUser: any;
+            let decoded;
 
-        if (role === USER_ROLE.user) {
-            accountUser = await User.findById(id);
-            profileId = accountUser?._id.toString();
-        } else if (role === USER_ROLE.admin) {
-            const profile = await Admin.findOne({ user: id })
-                .select('_id user')
-                .populate({
-                    path: 'user',
-                    select: '_id isDeleted isBlocked isVerified isActive',
-                });
-            profileId = profile?._id.toString();
-            accountUser = profile?.user;
-        } else {
-            const profile = await SuperAdmin.findOne({ user: id })
-                .select('_id user')
-                .populate({
-                    path: 'user',
-                    select: '_id isDeleted isBlocked isVerified isActive',
-                });
-            profileId = profile?._id.toString();
-            accountUser = profile?.user;
-        }
+            try {
+                decoded = jwt.verify(
+                    token,
+                    config.jwt_access_secret as string
+                ) as JwtPayload;
+            } catch (err) {
+                throw new AppError(httpStatus.UNAUTHORIZED, 'Token is expired');
+            }
 
-        if (!accountUser || !profileId) {
-            throw new AppError(httpStatus.NOT_FOUND, 'Unauthorized access');
-        }
-        if (accountUser.isDeleted) {
-            throw new AppError(
-                httpStatus.UNAUTHORIZED,
-                'Unauthorized access'
-            );
-        }
-        if (accountUser.isBlocked) {
-            throw new AppError(
-                httpStatus.UNAUTHORIZED,
-                'Your account is blocked'
-            );
-        }
-        if (!accountUser.isVerified) {
-            throw new AppError(
-                httpStatus.BAD_REQUEST,
-                'You are not verified user'
-            );
-        }
-        if (!accountUser.isActive) {
-            throw new AppError(
-                httpStatus.FORBIDDEN,
-                'Your account is inactive, please contact support'
-            );
-        }
-        if (requiredRoles.length && !requiredRoles.includes(role)) {
-            throw new AppError(
-                httpStatus.UNAUTHORIZED,
-                'You are not authorized'
-            );
-        }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id, role, email, profileId, iat } = decoded;
 
-        req.user = decoded;
-        req.user.profileId = profileId;
-        next();
-    });
+            if (!decoded) {
+                throw new AppError(httpStatus.UNAUTHORIZED, 'Token is expired');
+            }
+
+            // get the user if that here ---------
+            // const user = await User.findById(id);
+            let profileData: any;
+            if (role == USER_ROLE.admin) {
+                console.log('nice');
+            } else if (role == USER_ROLE.user) {
+                profileData = await NormalUser.findOne({ user: id })
+                    .select('_id user')
+                    .populate({
+                        path: 'user',
+                        select: '_id isDeleted isBlocked isVerified passwordChangedAt isActive',
+                    });
+            }  else if (USER_ROLE.superAdmin) {
+                profileData = await SuperAdmin.findOne({ user: id })
+                    .select('_id user')
+                    .populate({
+                        path: 'user',
+                        select: '_id isDeleted isBlocked isVerified passwordChangedAt isActive',
+                    });
+            }
+            if (!profileData) {
+                throw new AppError(httpStatus.NOT_FOUND, 'Unauthorized access');
+            }
+            const { user } = profileData;
+            if (!user) {
+                throw new AppError(
+                    httpStatus.UNAUTHORIZED,
+                    'Unauthorized access'
+                );
+            }
+            if (user.isDeleted) {
+                throw new AppError(
+                    httpStatus.UNAUTHORIZED,
+                    'Unauthorized access 2'
+                );
+            }
+            if (user.isBlocked) {
+                throw new AppError(
+                    httpStatus.UNAUTHORIZED,
+                    'Your account is blocked'
+                );
+            }
+            if (!user?.isVerified) {
+                throw new AppError(
+                    httpStatus.BAD_REQUEST,
+                    'You are not verified user'
+                );
+            }
+            if (!user.isActive) {
+                throw new AppError(
+                    httpStatus.FORBIDDEN,
+                    'Your account  is inactivated , please contact support'
+                );
+            }
+
+            // if (
+            //   user?.passwordChangedAt &&
+            //   (await User.isJWTIssuedBeforePasswordChange(
+            //     user?.passwordChangedAt,
+            //     iat as number,
+            //   ))
+            // ) {
+            //   throw new AppError(httpStatus.FORBIDDEN, 'You are not authorized 2');
+            // }
+            if (requiredRoles && !requiredRoles.includes(role)) {
+                throw new AppError(
+                    httpStatus.UNAUTHORIZED,
+                    'Your are not authorized 3'
+                );
+            }
+            // add those properties in req
+            req.user = decoded as JwtPayload;
+            req.user.profileId = profileData._id.toString();
+            next();
+        }
+    );
+};
 
 export default auth;
