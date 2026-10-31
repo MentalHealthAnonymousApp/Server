@@ -5,6 +5,7 @@ export type TCommunityPostStatus = 'pending' | 'approved' | 'rejected' | 'needs_
 
 export interface ICommunityReply {
     post: Types.ObjectId;
+    author: Types.ObjectId;
     content: string;
 }
 
@@ -15,18 +16,19 @@ export interface ICommunityPost {
     author: Types.ObjectId;
     title: string;
     content: string;
-    category: (typeof COMMUNITY_CATEGORIES)[keyof typeof COMMUNITY_CATEGORIES]
+    category: COMMUNITY_CATEGORIES;
     image?: string;
     likesCount: number;
     likedBy: Types.ObjectId[];
     repliesCount: number;
     isPinned: boolean;
     status: TCommunityPostStatus;
+    feedback?: string;
     rejectionReason?: string;
     reviewedAt?: Date;
+    reviewedBy?: Types.ObjectId;
     isDeleted: boolean;
 }
 
 export type CommunityPostDocument = ICommunityPost & Document;
 export type CommunityPostModel = Model<CommunityPostDocument>;
-

@@ -10,6 +10,7 @@ import { supportRoutes } from '../modules/support/support.routes';
 import { userRoutes } from '../modules/user/user.routes';
 import { topicRoutes } from '../modules/topic/topic.routes';
 import { resourceRoutes } from '../modules/resource/resource.routes';
+import { communityRoutes } from '../modules/community/community.routes';
 
 const router = Router();
 
@@ -29,6 +30,10 @@ const moduleRoutes = [
     {
         path: '/resource',
         router: resourceRoutes,
+    },
+    {
+        path: '/community',
+        router: communityRoutes,
     },
     {
         path: '/manage',

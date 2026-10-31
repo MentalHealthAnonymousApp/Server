@@ -15,13 +15,17 @@ const communityReplySchema = new Schema<CommunityReplyDocument, CommunityReplyMo
             required: true,
             index: true,
         },
-
+        author: {
+            type: Schema.Types.ObjectId,
+            ref: 'NormalUser',
+            required: true,
+            index: true,
+        },
         content: {
             type: String,
             required: true,
             trim: true,
         },
-
     },
     {
         timestamps: true,
@@ -38,6 +42,7 @@ const communityPostSchema = new Schema<CommunityPostDocument, CommunityPostModel
         author: {
             type: Schema.Types.ObjectId,
             ref: 'NormalUser',
+            required: true,
             index: true,
         },
         title: {
@@ -86,8 +91,14 @@ const communityPostSchema = new Schema<CommunityPostDocument, CommunityPostModel
         rejectionReason: {
             type: String,
         },
+        feedback: {
+            type: String,
+        },
         reviewedAt: {
             type: Date,
+        },
+        reviewedBy: {
+            type: Schema.Types.ObjectId,
         },
         isDeleted: {
             type: Boolean,
@@ -104,4 +115,3 @@ export const CommunityPost = model<CommunityPostDocument, CommunityPostModel>(
     communityPostSchema
 );
 export default CommunityPost;
-
