@@ -4,7 +4,7 @@ import config from '../../config';
 import { USER_ROLE } from './user.constant';
 import { TUser, UserModel } from './user.interface';
 
-const userSchema = new Schema<TUser>(
+const userSchema = new Schema<TUser, UserModel>(
     {
         profileId: {
             type: String,
@@ -47,11 +47,34 @@ const userSchema = new Schema<TUser>(
         role: {
             type: String,
             enum: Object.values(USER_ROLE),
+            default: USER_ROLE.member,
             required: true,
+        },
+        status: {
+            type: String,
+            enum: ['active', 'blocked', 'suspended', 'in-progress'],
+            default: 'active',
         },
         isBlocked: {
             type: Boolean,
             default: false,
+        },
+        blockedAt: {
+            type: Date,
+        },
+        blockedReason: {
+            type: String,
+        },
+        notes: {
+            type: String,
+        },
+        messagesSentCount: {
+            type: Number,
+            default: 0,
+        },
+        reportsReceivedCount: {
+            type: Number,
+            default: 0,
         },
         isActive: {
             type: Boolean,
@@ -111,11 +134,13 @@ userSchema.post('save', function (doc, next) {
     doc.password = '';
     next();
 });
+
 // statics method for check is user exists
 userSchema.statics.isUserExists = async function (phoneNumber: string) {
     return await User.findOne({ phoneNumber }).select('+password');
 };
-// statics method for check password match  ----
+
+// statics method for check password match
 userSchema.statics.isPasswordMatched = async function (
     plainPasswords: string,
     hashPassword: string
@@ -134,3 +159,4 @@ userSchema.statics.isJWTIssuedBeforePasswordChange = async function (
 };
 
 export const User = model<TUser, UserModel>('User', userSchema);
+export default User;

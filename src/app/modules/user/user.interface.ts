@@ -1,6 +1,9 @@
 /* eslint-disable no-unused-vars */
 import { Model } from 'mongoose';
-import { USER_ROLE } from './user.constant';
+import { USER_ROLE, USER_STATUS } from './user.constant';
+
+export type TUserRole = (typeof USER_ROLE)[keyof typeof USER_ROLE];
+export type TUserStatus = (typeof USER_STATUS)[keyof typeof USER_STATUS];
 
 export interface TUser {
     _id: string;
@@ -13,8 +16,14 @@ export interface TUser {
     dateOfBirth?: Date | null;
     password: string;
     passwordChangedAt?: Date;
-    role: (typeof USER_ROLE)[keyof typeof USER_ROLE];
+    role: TUserRole;
+    status: TUserStatus;
     isBlocked: boolean;
+    blockedAt?: Date;
+    blockedReason?: string;
+    notes?: string;
+    messagesSentCount: number;
+    reportsReceivedCount: number;
     verifyCode?: number;
     resetCode?: number;
     isVerified: boolean;
@@ -22,8 +31,8 @@ export interface TUser {
     codeExpireIn?: Date;
     isActive: boolean;
     isDeleted: boolean;
-    appleId: string;
-    googleId: string;
+    appleId?: string;
+    googleId?: string;
     playerIds: string[];
     notificationEnabled: boolean;
 }
@@ -41,18 +50,10 @@ export interface ILoginWithGoogle {
 }
 
 export interface UserModel extends Model<TUser> {
-    // myStaticMethod(): number;
     isUserExists(phoneNumber: string): Promise<TUser>;
-    //   isUserDeleted(email: string): Promise<boolean>;
-    //   isUserBlocked(email: string): Promise<boolean>;
-    isPasswordMatched(
-        plainPassword: string,
-        hashPassword: string
-    ): Promise<TUser>;
+    isPasswordMatched(plainPassword: string, hashPassword: string): Promise<TUser>;
     isJWTIssuedBeforePasswordChange(
         passwordChangeTimeStamp: Date,
         jwtIssuedTimeStamp: number
     ): Promise<boolean>;
 }
-
-export type TUserRole = keyof typeof USER_ROLE;
