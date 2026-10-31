@@ -5,49 +5,23 @@ import {
     CommunityReplyDocument,
     CommunityReplyModel,
 } from './community.interface';
-import { COMMUNITY_POST_STATUS } from './community.constant';
+import { COMMUNITY_CATEGORIES, COMMUNITY_POST_STATUS } from './community.constant';
 
 const communityReplySchema = new Schema<CommunityReplyDocument, CommunityReplyModel>(
     {
-        postId: {
+        post: {
             type: Schema.Types.ObjectId,
             ref: 'CommunityPost',
             required: true,
             index: true,
         },
-        authorId: {
-            type: Schema.Types.ObjectId,
-            ref: 'NormalUser',
-        },
-        authorName: {
-            type: String,
-            required: true,
-            trim: true,
-            default: 'Anonymous Member',
-        },
-        authorBadge: {
-            type: String,
-            trim: true,
-        },
+
         content: {
             type: String,
             required: true,
             trim: true,
         },
-        likesCount: {
-            type: Number,
-            default: 0,
-        },
-        likedBy: [
-            {
-                type: Schema.Types.ObjectId,
-                ref: 'NormalUser',
-            },
-        ],
-        isDeleted: {
-            type: Boolean,
-            default: false,
-        },
+
     },
     {
         timestamps: true,
@@ -61,20 +35,10 @@ export const CommunityReply = model<CommunityReplyDocument, CommunityReplyModel>
 
 const communityPostSchema = new Schema<CommunityPostDocument, CommunityPostModel>(
     {
-        authorId: {
+        author: {
             type: Schema.Types.ObjectId,
             ref: 'NormalUser',
             index: true,
-        },
-        authorName: {
-            type: String,
-            required: true,
-            trim: true,
-            default: 'Anonymous Member',
-        },
-        authorRole: {
-            type: String,
-            default: 'Community Member',
         },
         title: {
             type: String,
@@ -88,14 +52,9 @@ const communityPostSchema = new Schema<CommunityPostDocument, CommunityPostModel
         },
         category: {
             type: String,
-            default: 'General Discussion',
-            index: true,
+            enum: Object.values(COMMUNITY_CATEGORIES),
         },
-        topicTag: {
-            type: String,
-            default: 'Discussion',
-        },
-        imageUrl: {
+        image: {
             type: String,
             default: '',
         },
@@ -123,18 +82,12 @@ const communityPostSchema = new Schema<CommunityPostDocument, CommunityPostModel
             default: 'approved',
             index: true,
         },
-        feedback: {
-            type: String,
-        },
+
         rejectionReason: {
             type: String,
         },
         reviewedAt: {
             type: Date,
-        },
-        reviewedBy: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
         },
         isDeleted: {
             type: Boolean,
