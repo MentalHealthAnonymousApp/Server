@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { JwtPayload } from 'jsonwebtoken';
 import QueryBuilder from '../../builder/QueryBuilder';
 import { getIO, isUserOnline } from '../../socket/socket';
 import { USER_ROLE } from '../user/user.constant';
 import Notification from './notification.model';
-
 import mongoose from 'mongoose';
 import { Device } from '../device/device.model';
 import sendPushNotification from './helpers/sendPushNotification';
+import { ISendNotificationParams } from './notification.interface';
+
 const getAllNotificationFromDB = async (
     query: Record<string, any>,
     user: JwtPayload
@@ -46,30 +46,26 @@ const getAllNotificationFromDB = async (
 
 const seeNotification = async (user: JwtPayload) => {
     let result;
+    const now = new Date();
+
     if (user?.role === USER_ROLE.superAdmin) {
         result = await Notification.updateMany(
             { receiver: 'admin' },
-            { isRead: true },
-            { runValidators: true, new: true }
+            { isRead: true, readAt: now, isSeen: true, seenAt: now },
+            { runValidators: true }
         );
-        // const adminUnseenNotificationCount = await getAdminNotificationCount();
-        //@ts-ignore
-        // global.io.emit('admin-notifications', adminUnseenNotificationCount);
     }
     if (user?.role !== USER_ROLE.superAdmin) {
         result = await Notification.updateMany(
             { receiver: user?.profileId },
-            { isRead: true },
-            { runValidators: true, new: true }
+            { isRead: true, readAt: now, isSeen: true, seenAt: now },
+            { runValidators: true }
         );
     }
-    //   const updatedNotificationCount = await getUnseenNotificationCount(
-    //     user?.userId,
-    //   );
-    //@ts-ignore
-    //   global.io.to(user?.userId).emit('notifications', updatedNotificationCount);
+
     return result;
 };
+
 const seeSingleNotification = async (
     notificationId: string,
     user: JwtPayload
@@ -84,19 +80,21 @@ const seeSingleNotification = async (
 
     // Security: ensure user can only update their own notification
     if (user?.role === USER_ROLE.superAdmin) {
-        filter.receiver = USER_ROLE.superAdmin;
+        filter.receiver = 'admin';
     } else {
         filter.receiver = user?.profileId;
     }
 
+    const now = new Date();
     const result = await Notification.findOneAndUpdate(
         filter,
-        { isRead: true },
+        { isRead: true, readAt: now, isSeen: true, seenAt: now },
         { new: true, runValidators: true }
     );
 
     return result;
 };
+
 const deleteNotification = async (notificationId: string, user: JwtPayload) => {
     if (!mongoose.Types.ObjectId.isValid(notificationId)) {
         throw new Error('Invalid Notification ID');
@@ -118,6 +116,7 @@ const deleteNotification = async (notificationId: string, user: JwtPayload) => {
 
     return result;
 };
+
 const sendNotification = async ({
     receiver,
     title,
@@ -127,8 +126,7 @@ const sendNotification = async ({
     action = 'VIEW',
     entityId,
     meta = {},
-}: any) => {
-    console.log('Sending notificatn....................');
+}: ISendNotificationParams) => {
     const notification = await Notification.create({
         receiver,
         title,
@@ -143,7 +141,6 @@ const sendNotification = async ({
     });
 
     const userId = receiver.toString();
-    console.log('userid', userId);
     const io = getIO();
     const online = isUserOnline(userId);
 
@@ -159,10 +156,7 @@ const sendNotification = async ({
         isActive: true,
     }).select('playerId');
 
-    console.log('devices', devices);
-
     const playerIds = devices.map((d: any) => d.playerId).filter(Boolean);
-    console.log('playerids', playerIds);
     if (playerIds.length > 0) {
         await sendPushNotification({
             playerIds,

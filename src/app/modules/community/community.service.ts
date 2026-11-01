@@ -5,6 +5,7 @@ import { USER_ROLE } from '../user/user.constant';
 import { CommunityReply, default as CommunityPost } from './community.model';
 import { ICommunityPost, TCommunityPostStatus } from './community.interface';
 import { COMMUNITY_CATEGORIES, COMMUNITY_POST_STATUS } from './community.constant';
+import { appEventEmitter } from '../../events/eventEmitter';
 
 const PAGE_LIMIT_MAX = 100;
 const POST_SORT_FIELDS = ['createdAt', 'updatedAt', 'likesCount', 'repliesCount', 'isPinned'];
@@ -124,6 +125,13 @@ const createCommunityPostIntoDB = async (profileId: string, payload: Partial<ICo
         status: 'pending',
     });
 
+    // Notify admin about new pending post
+    appEventEmitter.emit('community:post:submitted', {
+        postId: post._id.toString(),
+        authorId: profileId,
+        title: post.title,
+    });
+
     return post.populate('author', 'fullName firstName lastName profile_image role');
 };
 
@@ -220,13 +228,40 @@ const moderateCommunityPostIntoDB = async (
             },
         },
         { new: true, runValidators: true }
-    ).populate('author', 'fullName firstName lastName profile_image role');
+    );
 
     if (!updated) {
         throw new AppError(StatusCodes.NOT_FOUND, 'Community post not found');
     }
 
-    return updated;
+    // Emit moderation event before populate (author is still ObjectId)
+    const authorId = updated.author.toString();
+    const postId = updated._id.toString();
+    const postTitle = updated.title;
+
+    if (payload.status === 'approved') {
+        appEventEmitter.emit('community:post:approved', {
+            postId,
+            authorId,
+            title: postTitle,
+        });
+    } else if (payload.status === 'rejected') {
+        appEventEmitter.emit('community:post:rejected', {
+            postId,
+            authorId,
+            title: postTitle,
+            reason: payload.rejectionReason ?? '',
+        });
+    } else if (payload.status === 'needs_update') {
+        appEventEmitter.emit('community:post:needs_update', {
+            postId,
+            authorId,
+            title: postTitle,
+            feedback: payload.feedback ?? '',
+        });
+    }
+
+    return updated.populate('author', 'fullName firstName lastName profile_image role');
 };
 
 const toggleCommunityPostLikeInDB = async (id: string, profileId: string) => {
@@ -244,6 +279,14 @@ const toggleCommunityPostLikeInDB = async (id: string, profileId: string) => {
     );
 
     if (likedPost) {
+        // Notify post author (if different from liker)
+        if (likedPost.author.toString() !== authorId.toString()) {
+            appEventEmitter.emit('community:post:liked', {
+                postId: postId.toString(),
+                authorId: likedPost.author.toString(),
+                likerName: 'A community member',
+            });
+        }
         return likedPost.populate('author', 'fullName firstName lastName profile_image role');
     }
 
@@ -300,7 +343,7 @@ const createCommunityReplyInDB = async (
             isDeleted: false,
             status: 'approved',
         }
-    ).select('_id');
+    ).select('_id author title');
     if (!parentPost) {
         throw new AppError(StatusCodes.NOT_FOUND, 'Approved community post not found');
     }
@@ -317,6 +360,16 @@ const createCommunityReplyInDB = async (
     if (!updatedPost.modifiedCount) {
         await CommunityReply.deleteOne({ _id: reply._id });
         throw new AppError(StatusCodes.NOT_FOUND, 'Approved community post not found');
+    }
+
+    // Notify post author about reply (if different from replier)
+    if (parentPost.author.toString() !== authorId.toString()) {
+        appEventEmitter.emit('community:reply:created', {
+            postId: postId,
+            postAuthorId: parentPost.author.toString(),
+            replierName: 'A user',
+            postTitle: parentPost.title,
+        });
     }
 
     return reply.populate('author', 'fullName firstName lastName profile_image role');

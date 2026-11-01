@@ -10,18 +10,14 @@ const onlineUsers = new Set<string>();
 
 const initializeSocket = (server: HTTPServer) => {
     if (!io) {
+        const allowedOrigins = process.env.ALLOWED_ORIGINS
+            ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+            : ['http://localhost:3000', 'http://localhost:3001'];
+
         io = new IOServer(server, {
             pingTimeout: 60000,
             cors: {
-                origin: [
-                    'http://localhost:3007',
-                    'http://localhost:3008',
-                    'http://localhost:3000',
-                    'http://localhost:3001',
-                    'http://10.10.20.48:3000',
-                    'http://localhost:9090',
-                    'http://10.10.20.43:9090',
-                ],
+                origin: allowedOrigins,
             },
         });
 

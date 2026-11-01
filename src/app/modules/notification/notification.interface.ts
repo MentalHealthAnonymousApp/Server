@@ -15,16 +15,29 @@ export interface INotification {
     message: string;
 
     data?: {
-        entity: NOTIFICATION_ENTITY_TYPE; // ORDER | SHIFT | PAYMENT
-        action: (typeof NOTIFICATION_ACTION)[keyof typeof NOTIFICATION_ACTION]; // VIEW | LIST | ACCEPT
+        entity: NOTIFICATION_ENTITY_TYPE;
+        action: (typeof NOTIFICATION_ACTION)[keyof typeof NOTIFICATION_ACTION];
         entityId?: Types.ObjectId;
-
         meta?: Record<string, any>;
     };
 
     isRead: boolean;
     readAt?: Date;
 
+    isSeen: boolean;
+    seenAt?: Date;
+
     createdAt?: Date;
     updatedAt?: Date;
+}
+
+export interface ISendNotificationParams {
+    receiver: string;
+    title: string;
+    message: string;
+    type: ENUM_NOTIFICATION_TYPE;
+    entity: NOTIFICATION_ENTITY_TYPE;
+    action?: (typeof NOTIFICATION_ACTION)[keyof typeof NOTIFICATION_ACTION];
+    entityId?: Types.ObjectId | string;
+    meta?: Record<string, unknown>;
 }

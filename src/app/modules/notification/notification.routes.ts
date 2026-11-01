@@ -13,6 +13,7 @@ router.get(
     ),
     notificationController.getAllNotification
 );
+
 router.patch(
     '/see-notifications',
     auth(
@@ -21,6 +22,16 @@ router.patch(
         USER_ROLE.admin
     ),
     notificationController.seeNotification
+);
+
+router.patch(
+    '/see-notification/:id',
+    auth(
+        USER_ROLE.superAdmin,
+        USER_ROLE.user,
+        USER_ROLE.admin
+    ),
+    notificationController.seeSingleNotification
 );
 
 router.delete(

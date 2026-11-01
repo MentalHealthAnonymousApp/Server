@@ -1,22 +1,25 @@
 /* eslint-disable no-unused-vars */
 export enum ENUM_NOTIFICATION_TYPE {
     GENERAL = 'general',
-    SUPPORT_CREATED = 'SUPPORT_CREATED',
+    COMMUNITY = 'community',
+    RESOURCE = 'resource',
+    TOPIC = 'topic',
+    SUPPORT = 'support',
+    MODERATION = 'moderation',
 }
+
 export const NOTIFICATION_ACTION = {
     VIEW: 'VIEW',
     LIST: 'LIST',
     ACTION: 'ACTION',
-};
+} as const;
 
 export const NOTIFICATION_ENTITY = {
-    ORDER: 'ORDER',
-    SHIFT: 'SHIFT',
-    PAYMENT: 'PAYMENT',
+    COMMUNITY_POST: 'COMMUNITY_POST',
+    COMMUNITY_REPLY: 'COMMUNITY_REPLY',
+    RESOURCE: 'RESOURCE',
+    TOPIC: 'TOPIC',
     USER: 'USER',
-    CAMPAIGN: 'CAMPAIGN',
-    REVIEW: 'REVIEW',
-    JOB: 'JOB',
     SUPPORT: 'SUPPORT',
 } as const;
 

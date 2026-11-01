@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import AppError from '../../error/appError';
 import Topic from './topic.model';
 import { ITopic } from './topic.interface';
+import { appEventEmitter } from '../../events/eventEmitter';
 
 const generateSlug = (name: string): string => {
     return name
@@ -23,6 +24,12 @@ const createTopicIntoDB = async (payload: Partial<ITopic>) => {
     payload.slug = slug;
 
     const result = await Topic.create(payload);
+
+    appEventEmitter.emit('topic:created', {
+        topicId: result._id.toString(),
+        name: result.name,
+    });
+
     return result;
 };
 
@@ -122,6 +129,11 @@ const updateTopicIntoDB = async (idOrSlug: string, payload: Partial<ITopic>) => 
     if (!updated) {
         throw new AppError(StatusCodes.NOT_FOUND, 'Topic not found to update');
     }
+
+    appEventEmitter.emit('topic:updated', {
+        topicId: updated._id.toString(),
+        name: updated.name,
+    });
 
     return updated;
 };

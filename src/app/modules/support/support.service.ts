@@ -21,7 +21,7 @@ const createSupport = async (
     const result = await Support.create(supportData);
     const data = {
         receiver: 'admin',
-        type: ENUM_NOTIFICATION_TYPE.SUPPORT_CREATED,
+        type: ENUM_NOTIFICATION_TYPE.SUPPORT,
         title: 'A new support created',
         message: 'A new support created , please resolved it',
         data: {

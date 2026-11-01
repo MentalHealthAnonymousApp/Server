@@ -4,6 +4,7 @@ import AppError from '../../error/appError';
 import Resource from './resource.model';
 import { IResource } from './resource.interface';
 import Topic from '../topic/topic.model';
+import { appEventEmitter } from '../../events/eventEmitter';
 
 const generateSlug = (title: string): string => {
     return title
@@ -30,6 +31,14 @@ const createResourceIntoDB = async (payload: Partial<IResource>) => {
     payload.slug = slug;
 
     const result = await Resource.create(payload);
+
+    if (payload.status === 'published') {
+        appEventEmitter.emit('resource:published', {
+            resourceId: result._id.toString(),
+            title: result.title,
+        });
+    }
+
     return await result.populate('topic', 'name slug tone icon');
 };
 
@@ -151,6 +160,13 @@ const updateResourceIntoDB = async (idOrSlug: string, payload: Partial<IResource
         throw new AppError(StatusCodes.NOT_FOUND, 'Resource not found to update');
     }
 
+    if (payload.status === 'published') {
+        appEventEmitter.emit('resource:published', {
+            resourceId: updated._id.toString(),
+            title: updated.title,
+        });
+    }
+
     return updated;
 };
 
@@ -183,4 +199,3 @@ export const ResourceServices = {
 };
 
 export default ResourceServices;
-

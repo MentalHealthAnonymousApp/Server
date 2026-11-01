@@ -27,6 +27,20 @@ const seeNotification = catchAsync(async (req, res) => {
     });
 });
 
+const seeSingleNotification = catchAsync(async (req, res) => {
+    const result = await notificationService.seeSingleNotification(
+        req.params.id,
+        req.user
+    );
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'Notification marked as read',
+        data: result,
+    });
+});
+
 const deleteNotification = catchAsync(async (req, res) => {
     const result = await notificationService.deleteNotification(
         req.params.id,
@@ -43,6 +57,7 @@ const deleteNotification = catchAsync(async (req, res) => {
 const notificationController = {
     getAllNotification,
     seeNotification,
+    seeSingleNotification,
     deleteNotification,
 };
 
