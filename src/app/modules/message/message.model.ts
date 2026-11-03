@@ -1,27 +1,14 @@
 import { Schema, model } from 'mongoose';
 import { MessageDocument, MessageModel } from './message.interface';
 import { DELIVERY_CHANNELS, DELIVERY_STATUS, MESSAGE_APPROVAL_STATUS } from './message.constant';
-import { TOPIC_TONES } from '../topic/topic.constant';
+import { ENUM_GENDER } from '../user/user.constant';
 
 const messageSchema = new Schema<MessageDocument, MessageModel>(
     {
-        senderId: {
+        sender: {
             type: Schema.Types.ObjectId,
             ref: 'NormalUser',
             index: true,
-        },
-        senderName: {
-            type: String,
-            default: 'Anonymous Sender',
-        },
-        senderEmail: {
-            type: String,
-            trim: true,
-            lowercase: true,
-        },
-        senderPhone: {
-            type: String,
-            trim: true,
         },
         recipientContactHash: {
             type: String,
@@ -36,6 +23,27 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
             type: String,
             trim: true,
         },
+        recipientEmail: {
+            type: String,
+            required: true,
+            trim: true,
+            lowercase: true,
+        },
+        recipientPhone: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        recipientAge: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        recipientGender: {
+            type: String,
+            enum: Object.values(ENUM_GENDER),
+            required: true,
+        },
         recipientRelationship: {
             type: String,
             trim: true,
@@ -46,20 +54,11 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
             required: true,
             index: true,
         },
-        topicId: {
+        topic: {
             type: Schema.Types.ObjectId,
             ref: 'Topic',
             required: true,
             index: true,
-        },
-        topicTitle: {
-            type: String,
-            required: true,
-        },
-        tone: {
-            type: String,
-            enum: TOPIC_TONES,
-            default: 'sky',
         },
         customNote: {
             type: String,
@@ -75,13 +74,10 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
             type: Date,
             default: Date.now,
         },
-        scheduledFor: {
-            type: Date,
-        },
         status: {
             type: String,
             enum: MESSAGE_APPROVAL_STATUS,
-            default: 'approved',
+            default: 'pending',
             index: true,
         },
         deliveryStatus: {
@@ -96,13 +92,8 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
         approvedAt: {
             type: Date,
         },
-        approvedBy: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
-        },
         sentAt: {
             type: Date,
-            default: Date.now,
         },
         isDeleted: {
             type: Boolean,

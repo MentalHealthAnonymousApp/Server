@@ -1,32 +1,29 @@
 import { Types, Model, Document } from 'mongoose';
-import { TTopicTone } from '../topic/topic.interface';
+import { ENUM_GENDER } from '../user/user.constant';
 
 export type TDeliveryChannel = 'sms' | 'email';
 export type TMessageApprovalStatus = 'pending' | 'approved' | 'rejected' | 'delivered';
 export type TDeliveryStatus = 'queued' | 'delivered' | 'failed';
 
 export interface IMessage {
-    senderId?: Types.ObjectId;
-    senderName?: string;
-    senderEmail?: string;
-    senderPhone?: string;
+    sender: Types.ObjectId;
     recipientContactHash?: string;
     maskedRecipient: string;
     recipientName?: string;
+    recipientEmail: string;
+    recipientPhone: string;
+    recipientAge: string;
+    recipientGender: (typeof ENUM_GENDER)[keyof typeof ENUM_GENDER];
     recipientRelationship?: string;
     channel: TDeliveryChannel;
-    topicId: Types.ObjectId;
-    topicTitle: string;
-    tone: TTopicTone;
+    topic: Types.ObjectId;
     customNote?: string;
     articles: Types.ObjectId[];
     submittedAt: Date;
-    scheduledFor?: Date;
     status: TMessageApprovalStatus;
     deliveryStatus: TDeliveryStatus;
     rejectionReason?: string;
     approvedAt?: Date;
-    approvedBy?: Types.ObjectId;
     sentAt?: Date;
     isDeleted: boolean;
 }

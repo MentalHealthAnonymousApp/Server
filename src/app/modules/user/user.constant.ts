@@ -1,9 +1,5 @@
 export const USER_ROLE = {
     user: 'user',
-    member: 'member',
-    verified_sender: 'verified_sender',
-    clinician: 'clinician',
-    caregiver: 'caregiver',
     admin: 'admin',
     superAdmin: 'superAdmin',
 } as const;
@@ -16,3 +12,8 @@ export const USER_STATUS = {
 } as const;
 
 export const UserStatus = ['active', 'blocked', 'suspended', 'in-progress'];
+export const ENUM_GENDER = {
+    Male: 'Male',
+    Female: 'Female',
+    Other: 'Other',
+} as const;

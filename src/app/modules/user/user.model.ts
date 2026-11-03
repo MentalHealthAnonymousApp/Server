@@ -47,7 +47,7 @@ const userSchema = new Schema<TUser, UserModel>(
         role: {
             type: String,
             enum: Object.values(USER_ROLE),
-            default: USER_ROLE.member,
+            default: USER_ROLE.user,
             required: true,
         },
         status: {
