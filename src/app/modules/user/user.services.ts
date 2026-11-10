@@ -13,7 +13,6 @@ import { UpdateUserProfileDTO } from './user.dto';
 import { TUserRole } from './user.interface';
 import { User } from './user.model';
 import { createToken } from './user.utils';
-import { INormalUser } from '../normal_user/normal_user.interface';
 import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
 import NormalUser from '../normal_user/normal_user.model';
@@ -61,20 +60,16 @@ const createAuthTokens = (user: {
 };
 
 export const registerUser = async (
-    payload: INormalUser & {
-        password: string;
-        confirmPassword: string;
-        playerId?: string;
-        platform?: 'ios' | 'android' | 'web';
-    }
+    payload: RegistrationPayload
 ) => {
     const {
+        userData,
         password,
         confirmPassword,
         playerId,
         platform = 'android',
-        ...profileData
     } = payload;
+    const profileData = userData;
 
     // validate password
     if (password !== confirmPassword) {

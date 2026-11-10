@@ -190,7 +190,7 @@ const addFAQ = async (payload: any) => {
     return await FAQ.create(payload);
 };
 const getFAQ = async () => {
-    return await FAQ.find({});
+    return await FAQ.find({}).sort({ order: 1, createdAt: 1 });
 };
 const editFAQ = async (
     id: string,

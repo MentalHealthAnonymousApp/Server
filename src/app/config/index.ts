@@ -25,13 +25,11 @@ export default {
         accountSid: process.env.TWILIO_ACCOUNT_SID,
         authToken: process.env.TWILIO_AUTH_TOKEN,
         phoneNumber: process.env.TWILIO_PHONE_NUMBER,
+        messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
     },
-    smtp: {
-        smtp_host: process.env.SMTP_HOST,
-        smtp_port: process.env.SMTP_PORT,
-        smtp_service: process.env.SMTP_SERVICE,
-        smtp_mail: process.env.SMTP_MAIL,
-        smtp_pass: process.env.SMTP_PASS,
+    email: {
+        resend_api_key: process.env.RESEND_API_KEY,
+        from_email: process.env.RESEND_FROM_EMAIL,
         name: process.env.SERVICE_NAME,
     },
 };

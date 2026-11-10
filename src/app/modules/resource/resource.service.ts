@@ -42,7 +42,10 @@ const createResourceIntoDB = async (payload: Partial<IResource>) => {
     return await result.populate('topic', 'name slug tone icon');
 };
 
-const getAllResourcesFromDB = async (query: Record<string, unknown>) => {
+const getAllResourcesFromDB = async (
+    query: Record<string, unknown>,
+    includeUnpublished = false
+) => {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.max(1, Number(query.limit) || 10);
     const skip = (page - 1) * limit;
@@ -52,6 +55,10 @@ const getAllResourcesFromDB = async (query: Record<string, unknown>) => {
     const sortOrder = (query.sortOrder as string)?.toLowerCase() === 'asc' ? 1 : -1;
 
     const matchConditions: Record<string, unknown>[] = [{ isDeleted: false }];
+
+    if (!includeUnpublished) {
+        matchConditions.push({ status: 'published' });
+    }
 
     if (searchTerm.trim()) {
         const regex = { $regex: searchTerm.trim(), $options: 'i' };
@@ -68,7 +75,7 @@ const getAllResourcesFromDB = async (query: Record<string, unknown>) => {
         matchConditions.push({ topic: new Types.ObjectId(query.topic as string) });
     }
 
-    if (query.status) {
+    if (includeUnpublished && query.status) {
         matchConditions.push({ status: query.status });
     }
 
@@ -113,17 +120,25 @@ const getAllResourcesFromDB = async (query: Record<string, unknown>) => {
     };
 };
 
-const getSingleResourceFromDB = async (idOrSlug: string) => {
+const getSingleResourceFromDB = async (idOrSlug: string, includeUnpublished = false) => {
     const identifierCondition: Record<string, unknown>[] = [{ slug: idOrSlug }];
 
     if (Types.ObjectId.isValid(idOrSlug)) {
         identifierCondition.push({ _id: new Types.ObjectId(idOrSlug) });
     }
 
-    const resource = await Resource.findOne({
+    const filter: Record<string, unknown> = {
         isDeleted: false,
         $or: identifierCondition,
-    }).populate('topic', 'name slug tone icon shortDescription');
+    };
+    if (!includeUnpublished) {
+        filter.status = 'published';
+    }
+
+    const resource = await Resource.findOne(filter).populate(
+        'topic',
+        'name slug tone icon shortDescription'
+    );
 
     if (!resource) {
         throw new AppError(StatusCodes.NOT_FOUND, 'Resource not found');

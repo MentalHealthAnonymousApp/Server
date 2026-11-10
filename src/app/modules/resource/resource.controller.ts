@@ -26,8 +26,31 @@ const getAllResources = catchAsync(async (req, res) => {
     });
 });
 
+const getAdminResources = catchAsync(async (req, res) => {
+    const result = await ResourceServices.getAllResourcesFromDB(req.query, true);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Resources fetched successfully',
+        meta: result.meta,
+        data: result.data,
+    });
+});
+
 const getSingleResource = catchAsync(async (req, res) => {
     const result = await ResourceServices.getSingleResourceFromDB(req.params.id);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Resource fetched successfully',
+        data: result,
+    });
+});
+
+const getAdminResource = catchAsync(async (req, res) => {
+    const result = await ResourceServices.getSingleResourceFromDB(req.params.id, true);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -62,10 +85,11 @@ const deleteResource = catchAsync(async (req, res) => {
 export const ResourceController = {
     createResource,
     getAllResources,
+    getAdminResources,
     getSingleResource,
+    getAdminResource,
     updateResource,
     deleteResource,
 };
 
 export default ResourceController;
-

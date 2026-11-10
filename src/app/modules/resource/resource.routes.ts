@@ -7,6 +7,16 @@ import ResourceValidations from './resource.validation';
 
 const router = express.Router();
 
+router.get(
+    '/admin',
+    auth(USER_ROLE.admin, USER_ROLE.superAdmin),
+    ResourceController.getAdminResources
+);
+router.get(
+    '/admin/:id',
+    auth(USER_ROLE.admin, USER_ROLE.superAdmin),
+    ResourceController.getAdminResource
+);
 router.get('/', ResourceController.getAllResources);
 router.get('/:id', ResourceController.getSingleResource);
 
@@ -32,4 +42,3 @@ router.delete(
 
 export const resourceRoutes = router;
 export default resourceRoutes;
-

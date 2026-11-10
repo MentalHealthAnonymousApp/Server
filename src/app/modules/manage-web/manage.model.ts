@@ -81,6 +81,10 @@ const contactUsSchema = new mongoose.Schema(
 //!FAQ
 const faqSchema = new mongoose.Schema(
   {
+    order: {
+      type: Number,
+      default: 0,
+    },
     question: {
       type: String,
       required: true,
