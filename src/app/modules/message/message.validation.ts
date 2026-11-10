@@ -1,36 +1,54 @@
 import { z } from 'zod';
 import { DELIVERY_CHANNELS, MESSAGE_APPROVAL_STATUS } from './message.constant';
-import { ENUM_GENDER } from '../user/user.constant';
 
 const createMessageValidationSchema = z.object({
     body: z.object({
-        recipientName: z.string().trim().optional(),
-        recipientEmail: z
-            .string({ required_error: 'Recipient email is required' })
-            .email('Invalid email address')
-            .trim(),
-        recipientPhone: z
-            .string({ required_error: 'Recipient phone is required' })
-            .trim()
-            .min(1, 'Recipient phone is required'),
-        recipientAge: z
-            .string({ required_error: 'Recipient age is required' })
-            .trim()
-            .min(1, 'Recipient age is required'),
-        recipientGender: z.enum(
-            Object.values(ENUM_GENDER) as [string, ...string[]],
-            { required_error: 'Recipient gender is required' }
-        ),
-        recipientRelationship: z.string().trim().optional(),
+        recipientName: z.string().trim().max(100).optional(),
+        recipientEmail: z.string().trim().email('Invalid email address').max(254).optional(),
+        recipientPhone: z.string().trim().max(25).optional(),
         channel: z.enum(DELIVERY_CHANNELS, {
             required_error: 'Delivery channel is required',
         }),
-        topic: z.string({ required_error: 'Topic ID is required' }).min(1),
-        customNote: z.string().trim().optional(),
+        senderAttestation: z.literal(true, {
+            errorMap: () => ({ message: 'Please confirm this message is appropriate to send' }),
+        }),
+        topic: z.string({ required_error: 'Topic ID or slug is required' }).trim().min(1).max(100),
+        customNote: z.string().trim().max(500).optional(),
         articles: z
-            .array(z.string().min(1))
+            .array(z.string().min(1).max(100))
+            .max(5, 'You can attach up to 5 resources')
             .optional()
             .default([]),
+    }).superRefine((body, context) => {
+        if (body.articles && new Set(body.articles).size !== body.articles.length) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['articles'],
+                message: 'Selected resources must not contain duplicates',
+            });
+        }
+        if (body.channel === 'email' && !body.recipientEmail) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['recipientEmail'],
+                message: 'Recipient email is required for email delivery',
+            });
+        }
+        if (body.channel === 'sms') {
+            if (!body.recipientPhone) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ['recipientPhone'],
+                    message: 'Recipient phone is required for SMS delivery',
+                });
+            } else if (!/^\+[1-9]\d{7,14}$/.test(body.recipientPhone)) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ['recipientPhone'],
+                    message: 'Recipient phone must use international E.164 format',
+                });
+            }
+        }
     }),
 });
 
@@ -49,4 +67,3 @@ export const MessageValidations = {
 };
 
 export default MessageValidations;
-

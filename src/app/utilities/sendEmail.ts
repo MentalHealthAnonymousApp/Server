@@ -25,7 +25,7 @@ const sendEmail = async (options: {
         throw new Error(`Resend failed to send email: ${result.error.message}`);
     }
     if (!result.data?.id) {
-        throw new Error('Resend did not confirm email delivery.');
+        throw new Error('Resend did not confirm email acceptance.');
     }
 };
 

@@ -1,18 +1,28 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { StatusCodes } from 'http-status-codes';
 import { Types } from 'mongoose';
+import { createHash } from 'crypto';
 import AppError from '../../error/appError';
 import { appEventEmitter } from '../../events/eventEmitter';
-import { TMessageApprovalStatus } from './message.interface';
+import { TDeliveryChannel, TMessageApprovalStatus } from './message.interface';
 import Message from './message.model';
+import Topic from '../topic/topic.model';
+import Resource from '../resource/resource.model';
+import sendEmail from '../../utilities/sendEmail';
+import sendSMS from '../../helper/sendSms';
+import { createMessageEmail, createMessageSms, getResourceUrl } from './message.template';
 
 // Helpers 
 
-const maskContact = (email: string, phone: string): string => {
-    // e.g. "jo***@gmail.com | ***-***-7890"
-    const maskedEmail = email.replace(/^(.{2})(.*)(@.*)$/, (_, a, _b, c) => `${a}***${c}`);
-    const maskedPhone = phone.replace(/\d(?=\d{4})/g, '*');
-    return `${maskedEmail} | ${maskedPhone}`;
+const maskContact = (channel: TDeliveryChannel, email?: string, phone?: string): string => {
+    if (channel === 'email' && email) {
+        const [local = '', domain = ''] = email.split('@');
+        return `${local.slice(0, 1)}***@${domain}`;
+    }
+    if (channel === 'sms' && phone) {
+        return phone.replace(/\d(?=\d{4})/g, '*');
+    }
+    return '***';
 };
 
 /*  User: create a message                                              */
@@ -21,52 +31,148 @@ const createMessageIntoDB = async (
     user: JwtPayload,
     payload: {
         recipientName?: string;
-        recipientEmail: string;
-        recipientPhone: string;
-        recipientAge: string;
-        recipientGender: string;
-        recipientRelationship?: string;
+        recipientEmail?: string;
+        recipientPhone?: string;
         channel: 'sms' | 'email';
         topic: string;
         customNote?: string;
         articles?: string[];
-    }
+    },
+    idempotencyKey: string
 ) => {
-    if (!Types.ObjectId.isValid(payload.topic)) {
-        throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid topic ID');
+    const senderId = user.profileId;
+    if (!Types.ObjectId.isValid(senderId)) {
+        throw new AppError(StatusCodes.UNAUTHORIZED, 'Authenticated user profile is invalid');
     }
 
-    if (payload.articles?.length) {
-        const invalidArticle = payload.articles.find((id) => !Types.ObjectId.isValid(id));
-        if (invalidArticle) {
-            throw new AppError(StatusCodes.BAD_REQUEST, `Invalid article ID: ${invalidArticle}`);
-        }
+    const topicConditions: Record<string, unknown>[] = [{ slug: payload.topic }];
+    if (Types.ObjectId.isValid(payload.topic)) {
+        topicConditions.push({ _id: new Types.ObjectId(payload.topic) });
+    }
+    const topic = await Topic.findOne({ isDeleted: false, $or: topicConditions }).select('_id name slug');
+    if (!topic) throw new AppError(StatusCodes.NOT_FOUND, 'Selected topic was not found');
+
+    const articleIds = [...new Set(payload.articles ?? [])];
+    if (articleIds.length > 5) {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'You can attach up to 5 resources');
+    }
+    if (articleIds.some((id) => !Types.ObjectId.isValid(id))) {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'One or more selected resource IDs are invalid');
     }
 
-    const maskedRecipient = maskContact(payload.recipientEmail, payload.recipientPhone);
+    const resources = articleIds.length
+        ? await Resource.find({
+              _id: { $in: articleIds.map((id) => new Types.ObjectId(id)) },
+              status: 'published',
+              isDeleted: false,
+          }).select('_id slug title topic')
+        : [];
+    if (resources.length !== articleIds.length) {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'One or more selected resources are unavailable');
+    }
 
-    const message = await Message.create({
-        sender: new Types.ObjectId(user.profileId),
+    const normalizedEmail = payload.channel === 'email' ? payload.recipientEmail?.trim().toLowerCase() : undefined;
+    const normalizedPhone = payload.channel === 'sms' ? payload.recipientPhone?.trim() : undefined;
+    if (payload.channel === 'email' && !normalizedEmail) {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'Recipient email is required for email delivery');
+    }
+    if (payload.channel === 'sms' && !normalizedPhone) {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'Recipient phone is required for SMS delivery');
+    }
+
+    const templateResources = resources.map((resource) => ({
+        title: resource.title,
+        url: getResourceUrl({ id: resource._id.toString(), slug: resource.slug }),
+    }));
+    const templateInput = {
         recipientName: payload.recipientName,
-        recipientEmail: payload.recipientEmail.toLowerCase().trim(),
-        recipientPhone: payload.recipientPhone.trim(),
-        recipientAge: payload.recipientAge.trim(),
-        recipientGender: payload.recipientGender,
-        recipientRelationship: payload.recipientRelationship,
-        maskedRecipient,
-        channel: payload.channel,
-        topic: new Types.ObjectId(payload.topic),
         customNote: payload.customNote,
-        articles: (payload.articles ?? []).map((id) => new Types.ObjectId(id)),
-        submittedAt: new Date(),
-        status: 'pending',
-        deliveryStatus: 'queued',
-    });
+        topicName: topic.name,
+        resources: templateResources,
+    };
+    const emailTemplate = payload.channel === 'email' ? createMessageEmail(templateInput) : undefined;
+    const smsText = payload.channel === 'sms' ? createMessageSms(templateInput) : undefined;
+    if (smsText && smsText.length > 1600) {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'SMS content is too long. Remove a resource or shorten the note.');
+    }
+    const requestHash = createHash('sha256')
+        .update(
+            JSON.stringify({
+                channel: payload.channel,
+                recipient: normalizedEmail || normalizedPhone,
+                recipientName: payload.recipientName?.trim() || '',
+                topic: topic._id.toString(),
+                customNote: payload.customNote?.trim() || '',
+                articles: articleIds.sort(),
+            })
+        )
+        .digest('hex');
+    const existing = await Message.findOne({ sender: senderId, idempotencyKey }).select('+idempotencyHash');
+    if (existing) {
+        if (existing.idempotencyHash !== requestHash) {
+            throw new AppError(StatusCodes.CONFLICT, 'This idempotency key was already used for a different message');
+        }
+        if (existing.deliveryStatus === 'failed') {
+            throw new AppError(StatusCodes.BAD_GATEWAY, 'The previous delivery attempt failed. Contact support before retrying to avoid duplicate delivery.');
+        }
+        return { messageId: existing._id.toString(), status: existing.deliveryStatus };
+    }
 
-    return message.populate([
-        { path: 'topic', select: 'name slug tone icon' },
-        { path: 'articles', select: 'title slug shortDescription' },
-    ]);
+    let message;
+    try {
+        message = await Message.create({
+        sender: new Types.ObjectId(senderId),
+        idempotencyKey,
+        idempotencyHash: requestHash,
+        attestedAt: new Date(),
+        recipientName: payload.recipientName?.trim(),
+        recipientEmail: normalizedEmail,
+        recipientPhone: normalizedPhone,
+        maskedRecipient: maskContact(payload.channel, normalizedEmail, normalizedPhone),
+        channel: payload.channel,
+        topic: topic._id,
+        customNote: payload.customNote?.trim(),
+        articles: resources.map((resource) => resource._id),
+        submittedAt: new Date(),
+        status: 'approved',
+        deliveryStatus: 'queued',
+        approvedAt: new Date(),
+    });
+    } catch (error) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
+            const duplicate = await Message.findOne({ sender: senderId, idempotencyKey }).select('+idempotencyHash');
+            if (duplicate?.idempotencyHash === requestHash) {
+                return { messageId: duplicate._id.toString(), status: duplicate.deliveryStatus };
+            }
+            throw new AppError(StatusCodes.CONFLICT, 'This idempotency key was already used');
+        }
+        throw error;
+    }
+
+    try {
+        if (payload.channel === 'email') {
+            await sendEmail({
+                email: normalizedEmail!,
+                subject: emailTemplate!.subject,
+                html: emailTemplate!.html,
+            });
+        } else {
+            await sendSMS(normalizedPhone!, smsText!);
+        }
+    } catch (error) {
+        await Message.updateOne(
+            { _id: message._id },
+            { $set: { deliveryStatus: 'failed' } }
+        );
+        if (error instanceof AppError) throw error;
+        throw new AppError(StatusCodes.BAD_GATEWAY, 'The delivery provider did not confirm the message. Contact support before retrying to avoid duplicate delivery.');
+    }
+
+    await Message.updateOne(
+        { _id: message._id },
+        { $set: { status: 'approved', deliveryStatus: 'queued', sentAt: new Date() } }
+    );
+    return { messageId: message._id.toString(), status: 'queued' as const };
 };
 
 /*  Admin: get all messages                                             */
@@ -132,12 +238,17 @@ const getAllMessagesFromDB = async (query: Record<string, unknown>) => {
 
 /*  Admin: get single message                                           */
 
-const getSingleMessageFromDB = async (id: string) => {
+const getSingleMessageFromDB = async (id: string, requester: JwtPayload) => {
     if (!Types.ObjectId.isValid(id)) {
         throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid message ID');
     }
 
-    const message = await Message.findOne({ _id: id, isDeleted: false })
+    const filter: Record<string, unknown> = { _id: id, isDeleted: false };
+    if (requester.role === 'user') {
+        filter.sender = requester.profileId;
+    }
+
+    const message = await Message.findOne(filter)
         .populate('sender', 'firstName lastName email profile_image')
         .populate('topic', 'name slug tone icon')
         .populate('articles', 'title slug shortDescription');
@@ -145,7 +256,6 @@ const getSingleMessageFromDB = async (id: string) => {
     if (!message) {
         throw new AppError(StatusCodes.NOT_FOUND, 'Message not found');
     }
-
     return message;
 };
 
@@ -289,4 +399,3 @@ export const MessageServices = {
 };
 
 export default MessageServices;
-

@@ -1,6 +1,4 @@
 import { Types, Model, Document } from 'mongoose';
-import { ENUM_GENDER } from '../user/user.constant';
-
 export type TDeliveryChannel = 'sms' | 'email';
 export type TMessageApprovalStatus = 'pending' | 'approved' | 'rejected' | 'delivered';
 export type TDeliveryStatus = 'queued' | 'delivered' | 'failed';
@@ -10,11 +8,14 @@ export interface IMessage {
     recipientContactHash?: string;
     maskedRecipient: string;
     recipientName?: string;
-    recipientEmail: string;
-    recipientPhone: string;
-    recipientAge: string;
-    recipientGender: (typeof ENUM_GENDER)[keyof typeof ENUM_GENDER];
+    recipientEmail?: string;
+    recipientPhone?: string;
+    recipientAge?: string;
+    recipientGender?: string;
     recipientRelationship?: string;
+    idempotencyKey?: string;
+    idempotencyHash?: string;
+    attestedAt?: Date;
     channel: TDeliveryChannel;
     topic: Types.ObjectId;
     customNote?: string;
@@ -31,4 +32,3 @@ export interface IMessage {
 export type MessageDocument = IMessage & Document;
 
 export type MessageModel = Model<MessageDocument>;
-

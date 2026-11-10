@@ -23,26 +23,33 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
             type: String,
             trim: true,
         },
+        idempotencyKey: {
+            type: String,
+            trim: true,
+        },
+        idempotencyHash: {
+            type: String,
+            select: false,
+        },
+        attestedAt: {
+            type: Date,
+        },
         recipientEmail: {
             type: String,
-            required: true,
             trim: true,
             lowercase: true,
         },
         recipientPhone: {
             type: String,
-            required: true,
             trim: true,
         },
         recipientAge: {
             type: String,
-            required: true,
             trim: true,
         },
         recipientGender: {
             type: String,
             enum: Object.values(ENUM_GENDER),
-            required: true,
         },
         recipientRelationship: {
             type: String,
@@ -105,6 +112,13 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
     }
 );
 
+messageSchema.index(
+    { sender: 1, idempotencyKey: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { idempotencyKey: { $type: 'string' } },
+    }
+);
+
 export const Message = model<MessageDocument, MessageModel>('Message', messageSchema);
 export default Message;
-
