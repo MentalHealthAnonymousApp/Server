@@ -10,6 +10,12 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
             ref: 'NormalUser',
             index: true,
         },
+        packagePurchaseId: {
+            type: Schema.Types.ObjectId,
+            ref: 'PackagePurchase',
+            required: true,
+            index: true,
+        },
         recipientContactHash: {
             type: String,
             index: true,

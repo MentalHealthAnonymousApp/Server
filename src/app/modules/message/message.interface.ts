@@ -5,6 +5,7 @@ export type TDeliveryStatus = 'queued' | 'delivered' | 'failed';
 
 export interface IMessage {
     sender: Types.ObjectId;
+    packagePurchaseId: Types.ObjectId;
     recipientContactHash?: string;
     maskedRecipient: string;
     recipientName?: string;

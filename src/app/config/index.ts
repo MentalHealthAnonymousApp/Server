@@ -21,6 +21,11 @@ export default {
     super_admin_email: process.env.SUPER_ADMIN_EMAIL,
     super_admin_password: process.env.SUPER_ADMIN_PASSWORD,
     google_api_key: process.env.GOOGLE_API_KEY,
+    stripe_secret_key: process.env.STRIPE_SECRET_KEY,
+    stripe_webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
+    stripe_price_basic: process.env.STRIPE_PRICE_BASIC,
+    stripe_price_standard: process.env.STRIPE_PRICE_STANDARD,
+    stripe_price_premium: process.env.STRIPE_PRICE_PREMIUM,
 
     twilio: {
         accountSid: process.env.TWILIO_ACCOUNT_SID,

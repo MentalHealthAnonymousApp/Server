@@ -13,6 +13,7 @@ const createMessageValidationSchema = z.object({
             errorMap: () => ({ message: 'Please confirm this message is appropriate to send' }),
         }),
         topic: z.string({ required_error: 'Topic ID or slug is required' }).trim().min(1).max(100),
+        packagePurchaseId: z.string().regex(/^[a-f\d]{24}$/i, 'A valid package purchase ID is required'),
         customNote: z.string().trim().max(500).optional(),
         articles: z
             .array(z.string().min(1).max(100))

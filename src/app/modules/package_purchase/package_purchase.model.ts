@@ -1,6 +1,15 @@
 import { Schema, model } from 'mongoose';
-import { PackagePurchaseDocument, PackagePurchaseModel } from './package_purchase.interface';
-import { PACKAGE_TIERS, PAYMENT_METHODS, PURCHASE_STATUS } from './package_purchase.constant';
+import {
+    PackagePurchaseDocument,
+    PackagePurchaseModel,
+} from './package_purchase.interface';
+import {
+    BILLING_PROVIDERS,
+    FULFILLMENT_STATUSES,
+    PACKAGE_TIERS,
+    PAYMENT_METHODS,
+    PURCHASE_STATUS,
+} from './package_purchase.constant';
 
 const packagePurchaseSchema = new Schema<PackagePurchaseDocument, PackagePurchaseModel>(
     {
@@ -9,54 +18,93 @@ const packagePurchaseSchema = new Schema<PackagePurchaseDocument, PackagePurchas
             ref: 'NormalUser',
             index: true,
         },
-        customerName: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        customerEmail: {
-            type: String,
-            required: true,
-            trim: true,
-            lowercase: true,
-        },
-        customerPhone: {
-            type: String,
-            trim: true,
-        },
         packageTier: {
             type: String,
             enum: PACKAGE_TIERS,
             required: true,
             index: true,
         },
-        packageName: {
+        productId: {
             type: String,
             required: true,
+            trim: true,
         },
-        amount: {
+        providerPriceId: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        amountMinor: {
             type: Number,
             required: true,
+            min: 0,
+            validate: {
+                validator: Number.isSafeInteger,
+                message: 'amountMinor must be a safe integer in the currency’s minor unit.',
+            },
         },
         currency: {
             type: String,
-            default: 'USD',
+            required: true,
+            uppercase: true,
+            trim: true,
+            match: /^[A-Z]{3}$/,
+        },
+        billingProvider: {
+            type: String,
+            enum: BILLING_PROVIDERS,
+            required: true,
+            index: true,
         },
         paymentMethod: {
             type: String,
             enum: PAYMENT_METHODS,
-            default: 'stripe',
         },
-        transactionId: {
+        providerTransactionId: {
             type: String,
-            required: true,
+            trim: true,
+        },
+        stripeCheckoutSessionId: {
+            type: String,
+            trim: true,
+            sparse: true,
             unique: true,
         },
         status: {
             type: String,
             enum: PURCHASE_STATUS,
-            default: 'completed',
+            required: true,
+            default: 'pending',
             index: true,
+        },
+        fulfillmentStatus: {
+            type: String,
+            enum: FULFILLMENT_STATUSES,
+            required: true,
+            default: 'pending',
+            index: true,
+        },
+        messageId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Message',
+        },
+        messageUsedAt: {
+            type: Date,
+        },
+        paidAt: {
+            type: Date,
+        },
+        refundedAt: {
+            type: Date,
+        },
+        refundedAmountMinor: {
+            type: Number,
+            min: 0,
+            validate: {
+                validator: (value: number | undefined) =>
+                    value === undefined || Number.isSafeInteger(value),
+                message: 'refundedAmountMinor must be a safe integer in the currency’s minor unit.',
+            },
         },
         consultationLink: {
             type: String,
@@ -64,6 +112,7 @@ const packagePurchaseSchema = new Schema<PackagePurchaseDocument, PackagePurchas
         },
         consultationSent: {
             type: Boolean,
+            required: true,
             default: false,
         },
         consultationSentAt: {
@@ -71,15 +120,11 @@ const packagePurchaseSchema = new Schema<PackagePurchaseDocument, PackagePurchas
         },
         consultationNotes: {
             type: String,
-        },
-        recipientContact: {
-            type: String,
-        },
-        topicName: {
-            type: String,
+            trim: true,
         },
         isDeleted: {
             type: Boolean,
+            required: true,
             default: false,
         },
     },
@@ -88,9 +133,16 @@ const packagePurchaseSchema = new Schema<PackagePurchaseDocument, PackagePurchas
     }
 );
 
+packagePurchaseSchema.index(
+    { billingProvider: 1, providerTransactionId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { providerTransactionId: { $type: 'string' } },
+    }
+);
+
 export const PackagePurchase = model<PackagePurchaseDocument, PackagePurchaseModel>(
     'PackagePurchase',
     packagePurchaseSchema
 );
 export default PackagePurchase;
-

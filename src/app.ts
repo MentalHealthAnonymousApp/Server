@@ -12,10 +12,16 @@ import globalErrorHandler from './app/middlewares/globalErrorHandler';
 import notFound from './app/middlewares/notFound';
 import { rateLimiters } from './app/middlewares/rateLimiter.middleware';
 import router from './app/routes';
+import PackagePurchaseController from './app/modules/package_purchase/package_purchase.controller';
 
 const app: Application = express();
 // VERY IMPORTANT (for proxy / nginx)
 app.set('trust proxy', 1);
+app.post(
+    '/api/v1/package-purchase/stripe-webhook',
+    express.raw({ type: 'application/json' }),
+    PackagePurchaseController.handleStripeWebhook
+);
 // parser----------------
 app.use(express.json());
 app.use(cookieParser());

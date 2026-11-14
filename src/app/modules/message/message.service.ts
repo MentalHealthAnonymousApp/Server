@@ -11,6 +11,8 @@ import Resource from '../resource/resource.model';
 import sendEmail from '../../utilities/sendEmail';
 import sendSMS from '../../helper/sendSms';
 import { createMessageEmail, createMessageSms, getResourceUrl } from './message.template';
+import PackagePurchase from '../package_purchase/package_purchase.model';
+import { errorLogger } from '../../shared/logger';
 
 // Helpers 
 
@@ -35,6 +37,7 @@ const createMessageIntoDB = async (
         recipientPhone?: string;
         channel: 'sms' | 'email';
         topic: string;
+        packagePurchaseId: string;
         customNote?: string;
         articles?: string[];
     },
@@ -43,6 +46,9 @@ const createMessageIntoDB = async (
     const senderId = user.profileId;
     if (!Types.ObjectId.isValid(senderId)) {
         throw new AppError(StatusCodes.UNAUTHORIZED, 'Authenticated user profile is invalid');
+    }
+    if (!Types.ObjectId.isValid(payload.packagePurchaseId)) {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'A valid package purchase is required');
     }
 
     const topicConditions: Record<string, unknown>[] = [{ slug: payload.topic }];
@@ -58,6 +64,18 @@ const createMessageIntoDB = async (
     }
     if (articleIds.some((id) => !Types.ObjectId.isValid(id))) {
         throw new AppError(StatusCodes.BAD_REQUEST, 'One or more selected resource IDs are invalid');
+    }
+    const purchase = await PackagePurchase.findOne({
+        _id: payload.packagePurchaseId,
+        userId: new Types.ObjectId(senderId),
+        billingProvider: { $in: ['stripe', 'apple_app_store', 'google_play'] },
+        isDeleted: false,
+    }).select('packageTier fulfillmentStatus messageId status');
+    if (!purchase) {
+        throw new AppError(StatusCodes.PAYMENT_REQUIRED, 'A confirmed package purchase is required to send a message');
+    }
+    if (purchase.packageTier === 'basic' && articleIds.length > 0) {
+        throw new AppError(StatusCodes.FORBIDDEN, 'The Basic package does not include resource attachments');
     }
 
     const resources = articleIds.length
@@ -102,6 +120,7 @@ const createMessageIntoDB = async (
                 recipient: normalizedEmail || normalizedPhone,
                 recipientName: payload.recipientName?.trim() || '',
                 topic: topic._id.toString(),
+                packagePurchaseId: payload.packagePurchaseId,
                 customNote: payload.customNote?.trim() || '',
                 articles: articleIds.sort(),
             })
@@ -117,11 +136,19 @@ const createMessageIntoDB = async (
         }
         return { messageId: existing._id.toString(), status: existing.deliveryStatus };
     }
+    if (
+        purchase.status !== 'completed' ||
+        purchase.fulfillmentStatus !== 'pending' ||
+        purchase.messageId
+    ) {
+        throw new AppError(StatusCodes.PAYMENT_REQUIRED, 'This package credit has already been used or is no longer available');
+    }
 
     let message;
     try {
         message = await Message.create({
         sender: new Types.ObjectId(senderId),
+        packagePurchaseId: new Types.ObjectId(payload.packagePurchaseId),
         idempotencyKey,
         idempotencyHash: requestHash,
         attestedAt: new Date(),
@@ -149,6 +176,23 @@ const createMessageIntoDB = async (
         throw error;
     }
 
+    const reservedPurchase = await PackagePurchase.findOneAndUpdate(
+        {
+            _id: payload.packagePurchaseId,
+            userId: new Types.ObjectId(senderId),
+            status: 'completed',
+            fulfillmentStatus: 'pending',
+            isDeleted: false,
+            messageId: { $exists: false },
+        },
+        { $set: { messageId: message._id } },
+        { new: true }
+    );
+    if (!reservedPurchase) {
+        await Message.deleteOne({ _id: message._id });
+        throw new AppError(StatusCodes.PAYMENT_REQUIRED, 'This package credit has already been used or is no longer available');
+    }
+
     try {
         if (payload.channel === 'email') {
             await sendEmail({
@@ -164,6 +208,14 @@ const createMessageIntoDB = async (
             { _id: message._id },
             { $set: { deliveryStatus: 'failed' } }
         );
+        await PackagePurchase.updateOne(
+            {
+                _id: payload.packagePurchaseId,
+                messageId: message._id,
+                fulfillmentStatus: 'pending',
+            },
+            { $unset: { messageId: 1 } }
+        );
         if (error instanceof AppError) throw error;
         throw new AppError(StatusCodes.BAD_GATEWAY, 'The delivery provider did not confirm the message. Contact support before retrying to avoid duplicate delivery.');
     }
@@ -172,6 +224,18 @@ const createMessageIntoDB = async (
         { _id: message._id },
         { $set: { status: 'approved', deliveryStatus: 'queued', sentAt: new Date() } }
     );
+    const consumedPurchase = await PackagePurchase.updateOne(
+        {
+            _id: payload.packagePurchaseId,
+            messageId: message._id,
+            fulfillmentStatus: 'pending',
+        },
+        { $set: { fulfillmentStatus: 'fulfilled', messageUsedAt: new Date() } }
+    );
+    if (consumedPurchase.modifiedCount !== 1) {
+        errorLogger.error(`Message ${message._id.toString()} was sent but its package credit could not be consumed`);
+        throw new AppError(StatusCodes.INTERNAL_SERVER_ERROR, 'The message was sent but package usage could not be recorded. Contact support before trying again.');
+    }
     return { messageId: message._id.toString(), status: 'queued' as const };
 };
 

@@ -12,6 +12,7 @@ import { topicRoutes } from '../modules/topic/topic.routes';
 import { resourceRoutes } from '../modules/resource/resource.routes';
 import { communityRoutes } from '../modules/community/community.routes';
 import { messageRoutes } from '../modules/message/message.routes';
+import { packagePurchaseRoutes } from '../modules/package_purchase/package_purchase.routes';
 
 const router = Router();
 
@@ -39,6 +40,10 @@ const moduleRoutes = [
     {
         path: '/message',
         router: messageRoutes,
+    },
+    {
+        path: '/package-purchase',
+        router: packagePurchaseRoutes,
     },
     {
         path: '/manage',
