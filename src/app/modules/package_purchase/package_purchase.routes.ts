@@ -33,5 +33,11 @@ router.get(
     PackagePurchaseController.getCheckoutSession
 );
 
+router.get(
+    '/my-credits',
+    auth(USER_ROLE.user),
+    PackagePurchaseController.getMyUnusedCredits
+);
+
 export const packagePurchaseRoutes = router;
 export default packagePurchaseRoutes;

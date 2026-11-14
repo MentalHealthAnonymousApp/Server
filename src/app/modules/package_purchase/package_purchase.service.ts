@@ -176,6 +176,28 @@ const verifyCheckoutSession = async (sessionId: string, userId: string) => {
     };
 };
 
+const getMyUnusedCredits = async (userId: string) => {
+    if (!Types.ObjectId.isValid(userId)) {
+        throw new AppError(StatusCodes.UNAUTHORIZED, 'Authenticated user profile is invalid');
+    }
+
+    const purchases = await PackagePurchase.find({
+        userId: new Types.ObjectId(userId),
+        status: 'completed',
+        fulfillmentStatus: 'pending',
+        messageId: { $exists: false },
+        isDeleted: false,
+    })
+        .select('_id packageTier paidAt createdAt')
+        .sort({ paidAt: 1, createdAt: 1 });
+
+    return purchases.map((purchase) => ({
+        purchaseId: purchase._id.toString(),
+        packageTier: purchase.packageTier,
+        paidAt: purchase.paidAt,
+    }));
+};
+
 const assertSessionMatchesPurchase = async (
     stripe: Stripe,
     session: Stripe.Checkout.Session,
@@ -370,6 +392,7 @@ const handleStripeWebhook = async (body: Buffer, signature: string | undefined) 
 const PackagePurchaseServices = {
     createCheckoutSession,
     verifyCheckoutSession,
+    getMyUnusedCredits,
     handleStripeWebhook,
 };
 

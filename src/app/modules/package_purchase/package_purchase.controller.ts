@@ -47,6 +47,21 @@ const getCheckoutSession = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getMyUnusedCredits = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user?.profileId) {
+        throw new AppError(StatusCodes.UNAUTHORIZED, 'You are not authorized');
+    }
+
+    const result = await PackagePurchaseServices.getMyUnusedCredits(user.profileId);
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Your unused package credits fetched successfully',
+        data: result,
+    });
+});
+
 const handleStripeWebhook = async (req: Request, res: Response) => {
     if (!Buffer.isBuffer(req.body)) {
         return res.status(StatusCodes.BAD_REQUEST).json({
@@ -79,6 +94,7 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 const PackagePurchaseController = {
     createCheckoutSession,
     getCheckoutSession,
+    getMyUnusedCredits,
     handleStripeWebhook,
 };
 
