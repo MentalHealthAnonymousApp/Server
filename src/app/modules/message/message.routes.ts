@@ -95,6 +95,13 @@ router.get(
     MessageController.getAllMessages
 );
 
+// Dashboard counters (must be registered before '/:id')
+router.get(
+    '/stats',
+    auth(USER_ROLE.admin, USER_ROLE.superAdmin),
+    MessageController.getMessageStats
+);
+
 // Get single message detail
 router.get(
     '/:id',
@@ -102,7 +109,7 @@ router.get(
     MessageController.getSingleMessage
 );
 
-// Approve / reject / update status
+// Approve (sends the message, or retries a failed delivery) / reject (returns the package credit)
 router.patch(
     '/:id/status',
     auth(USER_ROLE.admin, USER_ROLE.superAdmin),

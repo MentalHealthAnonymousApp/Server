@@ -21,6 +21,7 @@ export const NOTIFICATION_ENTITY = {
     TOPIC: 'TOPIC',
     USER: 'USER',
     SUPPORT: 'SUPPORT',
+    MESSAGE: 'MESSAGE',
 } as const;
 
 export type NOTIFICATION_ENTITY_TYPE =

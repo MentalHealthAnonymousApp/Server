@@ -105,6 +105,22 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
         approvedAt: {
             type: Date,
         },
+        autoApproveAt: {
+            type: Date,
+        },
+        autoApproved: {
+            type: Boolean,
+            default: false,
+        },
+        reviewedBy: {
+            type: Schema.Types.ObjectId,
+        },
+        reviewedAt: {
+            type: Date,
+        },
+        deliveryError: {
+            type: String,
+        },
         sentAt: {
             type: Date,
         },
@@ -124,6 +140,12 @@ messageSchema.index(
         unique: true,
         partialFilterExpression: { idempotencyKey: { $type: 'string' } },
     }
+);
+
+// Supports the auto-approval job: pending messages whose review window has elapsed.
+messageSchema.index(
+    { autoApproveAt: 1 },
+    { partialFilterExpression: { status: 'pending', isDeleted: false } }
 );
 
 export const Message = model<MessageDocument, MessageModel>('Message', messageSchema);

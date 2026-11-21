@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DELIVERY_CHANNELS, MESSAGE_APPROVAL_STATUS } from './message.constant';
+import { ADMIN_REVIEW_DECISIONS, DELIVERY_CHANNELS } from './message.constant';
 
 const createMessageValidationSchema = z.object({
     body: z.object({
@@ -55,10 +55,14 @@ const createMessageValidationSchema = z.object({
 
 const updateMessageStatusValidationSchema = z.object({
     body: z.object({
-        status: z.enum(MESSAGE_APPROVAL_STATUS, {
+        status: z.enum(ADMIN_REVIEW_DECISIONS, {
             required_error: 'Status is required',
+            invalid_type_error: 'Status must be approved or rejected',
         }),
-        rejectionReason: z.string().trim().optional(),
+        rejectionReason: z.string().trim().max(500).optional(),
+    }).refine((body) => body.status !== 'rejected' || Boolean(body.rejectionReason), {
+        path: ['rejectionReason'],
+        message: 'A rejection reason is required when rejecting a message',
     }),
 });
 

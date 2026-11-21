@@ -23,7 +23,7 @@ const createMessage = async (req: Request, res: Response) => {
         return sendResponse(res, {
             statusCode: StatusCodes.OK,
             success: true,
-            message: 'Message accepted for delivery',
+            message: 'Message submitted for review',
             data: result,
         });
     } catch (error) {
@@ -80,6 +80,17 @@ const getAllMessages = catchAsync(async (req, res) => {
     });
 });
 
+const getMessageStats = catchAsync(async (_req, res) => {
+    const result = await MessageServices.getMessageStatsFromDB();
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Message stats fetched successfully',
+        data: result,
+    });
+});
+
 const getSingleMessage = catchAsync(async (req, res) => {
     const result = await MessageServices.getSingleMessageFromDB(req.params.id, req.user);
 
@@ -94,13 +105,22 @@ const getSingleMessage = catchAsync(async (req, res) => {
 const updateMessageStatus = catchAsync(async (req, res) => {
     const result = await MessageServices.updateMessageStatusIntoDB(
         req.params.id,
-        req.body
+        req.body,
+        req.user
     );
+
+    let message = 'Message rejected and the package credit was returned to the user';
+    if (result?.status === 'delivered') message = 'Message approved and sent';
+    else if (result?.status === 'approved' && result.deliveryStatus === 'failed') {
+        message = 'Message approved, but delivery failed. You can retry or reject it.';
+    } else if (result?.status === 'rejected' && req.body.status === 'approved') {
+        message = 'Message could not be sent because its package payment is no longer valid';
+    }
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         success: true,
-        message: 'Message status updated successfully',
+        message,
         data: result,
     });
 });
@@ -120,6 +140,7 @@ export const MessageController = {
     createMessage,
     getMyMessages,
     getAllMessages,
+    getMessageStats,
     getSingleMessage,
     updateMessageStatus,
     deleteMessage,

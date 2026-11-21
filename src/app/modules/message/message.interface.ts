@@ -26,6 +26,11 @@ export interface IMessage {
     deliveryStatus: TDeliveryStatus;
     rejectionReason?: string;
     approvedAt?: Date;
+    autoApproveAt?: Date;
+    autoApproved?: boolean;
+    reviewedBy?: Types.ObjectId;
+    reviewedAt?: Date;
+    deliveryError?: string;
     sentAt?: Date;
     isDeleted: boolean;
 }

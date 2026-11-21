@@ -7,6 +7,8 @@ import config from './app/config';
 import seedSuperAdmin from './app/DB';
 import { errorLogger, logger } from './app/shared/logger';
 import { initializeSocket } from './app/socket/socket';
+import './app/events/listeners/message.listeners';
+import { startMessageAutoApprovalJob } from './app/modules/message/message.cron';
 
 let myServer: HTTPServer | undefined;
 
@@ -23,6 +25,7 @@ async function main() {
         });
 
         initializeSocket(myServer);
+        startMessageAutoApprovalJob();
 
         // Global unhandled rejection handler--------------
         process.on('unhandledRejection', (error) => {
