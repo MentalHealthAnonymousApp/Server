@@ -7,6 +7,10 @@ import config from '../../config';
 import { errorLogger } from '../../shared/logger';
 import PackagePurchase from './package_purchase.model';
 import { PackagePurchaseDocument, TPackageTier } from './package_purchase.interface';
+import { PACKAGE_TIERS } from './package_purchase.constant';
+import NormalUser from '../normal_user/normal_user.model';
+import sendEmail from '../../utilities/sendEmail';
+import { escapeHtml } from '../message/message.template';
 
 const expectedAmountsMinor: Record<TPackageTier, number> = {
     basic: 4900,
@@ -389,11 +393,175 @@ const handleStripeWebhook = async (body: Buffer, signature: string | undefined) 
     }
 };
 
+/* ------------------------------------------------------------------ */
+/*  Admin dashboard                                                     */
+/* ------------------------------------------------------------------ */
+
+// Purchases where money actually changed hands (excludes abandoned / failed checkouts).
+const PAID_STATUSES = ['completed', 'partially_refunded', 'refunded', 'disputed'];
+
+const ADMIN_PURCHASE_POPULATE = [
+    { path: 'userId', select: 'firstName lastName email phone profile_image' },
+    { path: 'messageId', select: 'status channel topic', populate: { path: 'topic', select: 'name' } },
+];
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const getAdminPurchases = async (query: Record<string, unknown>) => {
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
+
+    const filter: Record<string, unknown> = { isDeleted: false, status: { $in: PAID_STATUSES } };
+
+    if (typeof query.packageTier === 'string' && (PACKAGE_TIERS as readonly string[]).includes(query.packageTier)) {
+        filter.packageTier = query.packageTier;
+    }
+    if (query.consultation === 'pending' || query.consultation === 'sent') {
+        filter.packageTier = 'premium';
+        filter.consultationSent = query.consultation === 'sent';
+        if (query.consultation === 'pending') filter.status = 'completed';
+    }
+
+    if (typeof query.searchTerm === 'string' && query.searchTerm.trim()) {
+        const regex = new RegExp(escapeRegex(query.searchTerm.trim().slice(0, 100)), 'i');
+        // Resolve matching customers first, then match purchases by userId or transaction reference.
+        const users = await NormalUser.find({ $or: [{ firstName: regex }, { lastName: regex }, { email: regex }] })
+            .select('_id')
+            .limit(500)
+            .lean();
+        filter.$or = [
+            { userId: { $in: users.map((user) => user._id) } },
+            { providerTransactionId: regex },
+            { stripeCheckoutSessionId: regex },
+        ];
+    }
+
+    const [data, total] = await Promise.all([
+        PackagePurchase.find(filter)
+            .select('-__v')
+            .populate(ADMIN_PURCHASE_POPULATE)
+            .sort({ paidAt: -1, createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean(),
+        PackagePurchase.countDocuments(filter),
+    ]);
+
+    return { meta: { page, limit, total, totalPages: Math.ceil(total / limit) }, data };
+};
+
+/** All dashboard KPIs in one aggregation. Amounts are in minor units (cents), net of refunds. */
+const getAdminPurchaseStats = async () => {
+    const [result] = await PackagePurchase.aggregate<{
+        tiers: { _id: TPackageTier; count: number; revenueMinor: number }[];
+        pendingConsultations: { count: number }[];
+    }>([
+        { $match: { isDeleted: false, status: { $in: PAID_STATUSES } } },
+        {
+            $facet: {
+                tiers: [
+                    {
+                        $group: {
+                            _id: '$packageTier',
+                            count: { $sum: 1 },
+                            revenueMinor: {
+                                $sum: { $subtract: ['$amountMinor', { $ifNull: ['$refundedAmountMinor', 0] }] },
+                            },
+                        },
+                    },
+                ],
+                pendingConsultations: [
+                    { $match: { packageTier: 'premium', status: 'completed', consultationSent: false } },
+                    { $count: 'count' },
+                ],
+            },
+        },
+    ]);
+
+    const tiers = Object.fromEntries(
+        PACKAGE_TIERS.map((tier) => [tier, { count: 0, revenueMinor: 0 }])
+    ) as Record<TPackageTier, { count: number; revenueMinor: number }>;
+    for (const row of result?.tiers ?? []) tiers[row._id] = { count: row.count, revenueMinor: row.revenueMinor };
+
+    return {
+        totalCount: PACKAGE_TIERS.reduce((sum, tier) => sum + tiers[tier].count, 0),
+        totalRevenueMinor: PACKAGE_TIERS.reduce((sum, tier) => sum + tiers[tier].revenueMinor, 0),
+        currency: 'USD',
+        tiers,
+        pendingConsultations: result?.pendingConsultations[0]?.count ?? 0,
+    };
+};
+
+const sendConsultationLink = async (
+    purchaseId: string,
+    payload: { consultationLink: string; subject: string; message: string }
+) => {
+    if (!Types.ObjectId.isValid(purchaseId)) {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid purchase ID');
+    }
+
+    const purchase = await PackagePurchase.findOne({ _id: purchaseId, isDeleted: false })
+        .select('packageTier status userId')
+        .populate<{ userId: { email?: string } | null }>('userId', 'email');
+    if (!purchase) throw new AppError(StatusCodes.NOT_FOUND, 'Package purchase not found');
+    if (purchase.packageTier !== 'premium') {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'Only Premium packages include a consultation');
+    }
+    if (purchase.status !== 'completed') {
+        throw new AppError(
+            StatusCodes.CONFLICT,
+            `A ${purchase.status.replace('_', ' ')} purchase cannot receive a consultation link`
+        );
+    }
+    const email = purchase.userId?.email;
+    if (!email) {
+        throw new AppError(StatusCodes.UNPROCESSABLE_ENTITY, 'This customer has no email address on file');
+    }
+
+    const link = escapeHtml(payload.consultationLink);
+    const html = `<!doctype html><html><body style="margin:0;background:#f4f7f4;font-family:Arial,Helvetica,sans-serif;color:#26332d">
+      <div style="max-width:560px;margin:0 auto;padding:32px 20px">
+        <div style="background:#ffffff;border-radius:16px;padding:28px">
+          <p style="margin:0 0 20px;line-height:1.6;white-space:pre-wrap">${escapeHtml(payload.message)}</p>
+          <a href="${link}" style="display:inline-block;padding:12px 22px;border-radius:24px;background:#2e5e52;color:#ffffff;font-weight:700;text-decoration:none">Join your consultation</a>
+          <p style="margin:20px 0 0;font-size:12px;color:#6b7a73;word-break:break-all">Or open this link: ${link}</p>
+        </div>
+      </div></body></html>`;
+
+    try {
+        await sendEmail({ email, subject: payload.subject, html });
+    } catch (error) {
+        errorLogger.error(`Consultation email failed for purchase ${purchaseId}`, error);
+        throw new AppError(
+            StatusCodes.BAD_GATEWAY,
+            'The email provider did not accept the consultation email. Please try again.'
+        );
+    }
+
+    return PackagePurchase.findByIdAndUpdate(
+        purchaseId,
+        {
+            $set: {
+                consultationLink: payload.consultationLink,
+                consultationNotes: payload.message,
+                consultationSent: true,
+                consultationSentAt: new Date(),
+            },
+        },
+        { new: true }
+    )
+        .populate(ADMIN_PURCHASE_POPULATE)
+        .lean();
+};
+
 const PackagePurchaseServices = {
     createCheckoutSession,
     verifyCheckoutSession,
     getMyUnusedCredits,
     handleStripeWebhook,
+    getAdminPurchases,
+    getAdminPurchaseStats,
+    sendConsultationLink,
 };
 
 export default PackagePurchaseServices;

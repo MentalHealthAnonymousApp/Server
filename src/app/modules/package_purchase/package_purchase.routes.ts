@@ -39,5 +39,26 @@ router.get(
     PackagePurchaseController.getMyUnusedCredits
 );
 
+/*  Admin dashboard                                                     */
+
+router.get(
+    '/admin',
+    auth(USER_ROLE.admin, USER_ROLE.superAdmin),
+    PackagePurchaseController.getAdminPurchases
+);
+
+router.get(
+    '/admin/stats',
+    auth(USER_ROLE.admin, USER_ROLE.superAdmin),
+    PackagePurchaseController.getAdminPurchaseStats
+);
+
+router.patch(
+    '/admin/:id/consultation',
+    auth(USER_ROLE.admin, USER_ROLE.superAdmin),
+    validateRequest(PackagePurchaseValidations.sendConsultationLinkValidationSchema),
+    PackagePurchaseController.sendConsultationLink
+);
+
 export const packagePurchaseRoutes = router;
 export default packagePurchaseRoutes;

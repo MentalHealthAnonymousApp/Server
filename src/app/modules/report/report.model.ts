@@ -9,7 +9,6 @@ const reportSchema = new Schema<ReportDocument, ReportModel>(
         messageId: {
             type: Schema.Types.ObjectId,
             ref: 'Message',
-            index: true,
         },
         reportedUserId: {
             type: Schema.Types.ObjectId,
@@ -80,6 +79,13 @@ const reportSchema = new Schema<ReportDocument, ReportModel>(
         timestamps: true,
     }
 );
+
+// One report per delivered message (a recipient re-submitting gets a friendly "already reported").
+reportSchema.index(
+    { messageId: 1 },
+    { unique: true, partialFilterExpression: { messageId: { $type: 'objectId' } }, name: 'unique_report_per_message' }
+);
+reportSchema.index({ status: 1, createdAt: -1 });
 
 export const Report = model<ReportDocument, ReportModel>('Report', reportSchema);
 export default Report;

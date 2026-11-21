@@ -28,6 +28,7 @@ export interface INormalUser {
   messagesSentCount: number;
   reportsReceivedCount: number;
   lastActiveAt?: Date;
+  isDeleted?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }

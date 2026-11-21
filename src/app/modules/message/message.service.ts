@@ -1,7 +1,7 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { StatusCodes } from 'http-status-codes';
 import { Types } from 'mongoose';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import AppError from '../../error/appError';
 import { appEventEmitter } from '../../events/eventEmitter';
 import { TDeliveryChannel, TMessageApprovalStatus } from './message.interface';
@@ -10,7 +10,7 @@ import Topic from '../topic/topic.model';
 import Resource from '../resource/resource.model';
 import sendEmail from '../../utilities/sendEmail';
 import sendSMS from '../../helper/sendSms';
-import { createMessageEmail, createMessageSms, getResourceUrl } from './message.template';
+import { createMessageEmail, createMessageSms, getReportUrl, getResourceUrl } from './message.template';
 import PackagePurchase from '../package_purchase/package_purchase.model';
 import { errorLogger, logger } from '../../shared/logger';
 import {
@@ -30,6 +30,8 @@ const ADMIN_POPULATE = [
     { path: 'topic', select: 'name slug tone icon' },
     { path: 'articles', select: 'title slug shortDescription' },
 ];
+
+const newReportToken = () => randomBytes(24).toString('base64url');
 
 const maskContact = (channel: TDeliveryChannel, email?: string, phone?: string): string => {
     if (channel === 'email' && email) {
@@ -139,9 +141,12 @@ const createMessageIntoDB = async (
         throw new AppError(StatusCodes.BAD_REQUEST, 'Recipient phone is required for SMS delivery');
     }
 
+    const reportToken = newReportToken();
+
     // Validate SMS length up front so the user can fix it now rather than it failing after approval.
     if (payload.channel === 'sms') {
         const smsText = createMessageSms({
+            reportUrl: getReportUrl(reportToken),
             recipientName: payload.recipientName,
             customNote: payload.customNote,
             topicName: topic.name,
@@ -194,6 +199,7 @@ const createMessageIntoDB = async (
             packagePurchaseId: new Types.ObjectId(payload.packagePurchaseId),
             idempotencyKey,
             idempotencyHash: requestHash,
+            reportToken,
             attestedAt: now,
             recipientName: payload.recipientName?.trim(),
             recipientEmail: normalizedEmail,
@@ -273,6 +279,7 @@ const claimMessageForDelivery = (id: string, reviewerId?: string) => {
         },
         { new: true }
     )
+        .select('+reportToken')
         .populate('topic', 'name')
         .populate({
             path: 'articles',
@@ -306,9 +313,17 @@ const deliverClaimedMessage = async (message: ClaimedMessage): Promise<'delivere
         return 'invalid';
     }
 
+    // Messages created before report links existed get a token at send time.
+    let reportToken = message.reportToken;
+    if (!reportToken) {
+        reportToken = newReportToken();
+        await Message.updateOne({ _id: messageId }, { $set: { reportToken } });
+    }
+
     const topic = message.topic as unknown as { name?: string } | null;
     const articles = (message.articles as unknown as { _id: Types.ObjectId; title: string; slug?: string }[]).filter(Boolean);
     const templateInput = {
+        reportUrl: getReportUrl(reportToken),
         recipientName: message.recipientName,
         customNote: message.customNote,
         topicName: topic?.name ?? 'Mental health support',
@@ -434,6 +449,33 @@ const updateMessageStatusIntoDB = async (
     }
 
     return Message.findById(id).populate(ADMIN_POPULATE);
+};
+
+/**
+ * Called when a sender is blocked: their pending messages must not auto-send after 3 days.
+ * Rejects them in bulk and returns their package credits (a fixed number of queries, not one per message).
+ */
+const rejectPendingMessagesFromSender = async (senderProfileId: Types.ObjectId, reason: string) => {
+    const pending = await Message.find({ sender: senderProfileId, status: 'pending', isDeleted: false })
+        .select('_id')
+        .lean();
+    if (!pending.length) return 0;
+
+    const ids = pending.map((message) => message._id);
+    const result = await Message.updateMany(
+        { _id: { $in: ids }, status: 'pending' },
+        { $set: { status: 'rejected', rejectionReason: reason, reviewedAt: new Date() } }
+    );
+    if (!result.modifiedCount) return 0;
+    // Only messages that really ended up rejected (one could have been approved concurrently).
+    const rejectedIds = (
+        await Message.find({ _id: { $in: ids }, status: 'rejected' }).select('_id').lean()
+    ).map((message) => message._id);
+    await PackagePurchase.updateMany({ messageId: { $in: rejectedIds } }, [
+        { $set: { fulfillmentStatus: { $cond: [{ $eq: ['$status', 'completed'] }, 'pending', 'failed'] } } },
+        { $unset: ['messageId', 'messageUsedAt'] },
+    ]);
+    return result.modifiedCount;
 };
 
 /* ------------------------------------------------------------------ */
@@ -674,6 +716,7 @@ export const MessageServices = {
     updateMessageStatusIntoDB,
     autoApproveOverdueMessages,
     migrateLegacyMessages,
+    rejectPendingMessagesFromSender,
     deleteMessageFromDB,
     getMyMessagesFromDB,
 };

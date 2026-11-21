@@ -51,3 +51,25 @@ appEventEmitter.on(
         }).catch(logFailure('message:rejected'));
     }
 );
+
+// report:created → admins see a new recipient report
+const REPORT_REASON_LABELS: Record<string, string> = {
+    harassment: 'harassment',
+    unsolicited: 'unsolicited contact',
+    distressing: 'distressing content',
+    wrong_number: 'wrong recipient',
+    spam: 'spam',
+    other: 'another concern',
+};
+
+appEventEmitter.on('report:created', (payload: { reportId: string; reasonCategory: string }) => {
+    NotificationService.sendNotification({
+        receiver: 'admin',
+        title: 'New Message Report',
+        message: `A recipient reported a message for ${REPORT_REASON_LABELS[payload.reasonCategory] ?? 'a concern'}.`,
+        type: ENUM_NOTIFICATION_TYPE.MODERATION,
+        entity: NOTIFICATION_ENTITY.REPORT,
+        action: NOTIFICATION_ACTION.ACTION,
+        entityId: payload.reportId,
+    }).catch(logFailure('report:created'));
+});

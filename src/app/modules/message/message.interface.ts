@@ -15,6 +15,7 @@ export interface IMessage {
     recipientGender?: string;
     recipientRelationship?: string;
     idempotencyKey?: string;
+    reportToken?: string;
     idempotencyHash?: string;
     attestedAt?: Date;
     channel: TDeliveryChannel;

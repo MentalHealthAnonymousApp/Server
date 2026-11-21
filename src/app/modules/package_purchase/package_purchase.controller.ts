@@ -91,7 +91,41 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
     }
 };
 
+const getAdminPurchases = catchAsync(async (req: Request, res: Response) => {
+    const result = await PackagePurchaseServices.getAdminPurchases(req.query);
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Package purchases fetched successfully',
+        meta: result.meta,
+        data: result.data,
+    });
+});
+
+const getAdminPurchaseStats = catchAsync(async (_req: Request, res: Response) => {
+    const result = await PackagePurchaseServices.getAdminPurchaseStats();
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Package purchase stats fetched successfully',
+        data: result,
+    });
+});
+
+const sendConsultationLink = catchAsync(async (req: Request, res: Response) => {
+    const result = await PackagePurchaseServices.sendConsultationLink(req.params.id, req.body);
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Consultation email sent successfully',
+        data: result,
+    });
+});
+
 const PackagePurchaseController = {
+    getAdminPurchases,
+    getAdminPurchaseStats,
+    sendConsultationLink,
     createCheckoutSession,
     getCheckoutSession,
     getMyUnusedCredits,

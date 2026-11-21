@@ -33,6 +33,13 @@ const messageSchema = new Schema<MessageDocument, MessageModel>(
             type: String,
             trim: true,
         },
+        // Opaque, unguessable token used in the recipient's "Report this message" link.
+        reportToken: {
+            type: String,
+            select: false,
+            unique: true,
+            sparse: true,
+        },
         idempotencyHash: {
             type: String,
             select: false,

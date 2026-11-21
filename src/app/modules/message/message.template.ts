@@ -5,9 +5,10 @@ interface SharedMessageTemplateInput {
     customNote?: string;
     topicName: string;
     resources: Array<{ title: string; url: string }>;
+    reportUrl?: string;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
     return value.replace(/[&<>"']/g, (character) => {
         const entities: Record<string, string> = {
             '&': '&amp;',
@@ -41,6 +42,14 @@ export function getResourceUrl(resource: { slug?: string; id: string }): string 
     const url = getWebsiteUrl();
     url.pathname = `/resources/${encodeURIComponent(resource.slug || resource.id)}`;
     url.search = '';
+    url.hash = '';
+    return url.toString();
+}
+
+export function getReportUrl(reportToken: string): string {
+    const url = getWebsiteUrl();
+    url.pathname = '/report';
+    url.search = `?ref=${encodeURIComponent(reportToken)}`;
     url.hash = '';
     return url.toString();
 }
@@ -102,6 +111,7 @@ export function createMessageEmail(input: SharedMessageTemplateInput): {
             ${note}
             ${resourceSection}
             <p style="margin-top:32px;color:#68756e;font-size:12px;line-height:1.6">This message was sent through Mental Health Anonymous. The sender's identity is not included. These educational resources are not a substitute for professional care.</p>
+            ${input.reportUrl ? `<p style="margin-top:12px;color:#68756e;font-size:12px;line-height:1.6">Didn't want this message, or feel it was inappropriate? <a href="${escapeHtml(input.reportUrl)}" style="color:#2e5e52;font-weight:700">Report it to our support team</a>. Your report is confidential.</p>` : ''}
           </td></tr>
         </table>
       </td></tr>
@@ -117,5 +127,5 @@ export function createMessageSms(input: SharedMessageTemplateInput): string {
     const links = input.resources.length
         ? `\n\nResources:\n${input.resources.map((resource) => `${resource.title}: ${resource.url}`).join('\n')}`
         : `\n\nExplore resources: ${getWebsiteUrl().toString()}`;
-    return `Someone cares about you${recipient} and wanted to share support for ${input.topicName}.${note}${links}\n\nShared anonymously via Mental Health Anonymous. Educational resources only.`;
+    return `Someone cares about you${recipient} and wanted to share support for ${input.topicName}.${note}${links}\n\nShared anonymously via Mental Health Anonymous. Educational resources only.${input.reportUrl ? `\nReport a concern: ${input.reportUrl}` : ''}`;
 }

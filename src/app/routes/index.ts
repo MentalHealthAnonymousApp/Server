@@ -13,6 +13,8 @@ import { resourceRoutes } from '../modules/resource/resource.routes';
 import { communityRoutes } from '../modules/community/community.routes';
 import { messageRoutes } from '../modules/message/message.routes';
 import { packagePurchaseRoutes } from '../modules/package_purchase/package_purchase.routes';
+import { reportRoutes } from '../modules/report/report.routes';
+import { normalUserRoutes } from '../modules/normal_user/normal_user.routes';
 
 const router = Router();
 
@@ -40,6 +42,14 @@ const moduleRoutes = [
     {
         path: '/message',
         router: messageRoutes,
+    },
+    {
+        path: '/report',
+        router: reportRoutes,
+    },
+    {
+        path: '/normal-user',
+        router: normalUserRoutes,
     },
     {
         path: '/package-purchase',

@@ -29,6 +29,7 @@ const normalUserSchema = new Schema<NormalUserDocument, NormalUserModel>(
     messagesSentCount: { type: Number, default: 0 },
     reportsReceivedCount: { type: Number, default: 0 },
     lastActiveAt: { type: Date, default: Date.now },
+    isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true }
 );
